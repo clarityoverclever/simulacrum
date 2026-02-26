@@ -33,3 +33,6 @@ Thumbs.db
 
 # Jujutsu version control
 .jj/
+
+# logging dir
+/var

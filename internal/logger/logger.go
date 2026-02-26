@@ -15,26 +15,37 @@
 package logger
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-func Init(level slog.Level, format string) {
-	var handler slog.Handler
+func Init(level slog.Level, logFilePath string) error {
+	logDir := filepath.Dir(logFilePath)
 
-	opts := &slog.HandlerOptions{
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	logWriter := &lumberjack.Logger{
+		Filename:   logFilePath,
+		MaxSize:    100, // megabytes
+		MaxAge:     30,  //days
+		MaxBackups: 5,
+		LocalTime:  true,
+	}
+
+	handler := slog.NewJSONHandler(logWriter, &slog.HandlerOptions{
 		Level: level,
-	}
-
-	switch format {
-	case "json":
-		handler = slog.NewJSONHandler(os.Stdout, opts)
-	default:
-		handler = slog.NewTextHandler(os.Stdout, opts)
-	}
+	})
 
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
+
+	return nil
 }
 
 func Info(msg string, args ...any) {

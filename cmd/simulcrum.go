@@ -15,9 +15,11 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"simulcrum/internal/dns"
 	"simulcrum/internal/logger"
 	"syscall"
 )
@@ -26,27 +28,57 @@ func init() {}
 
 func main() {
 	// init logger
-	logger.Init(slog.LevelInfo, "json")
-
-	logger.Info("starting simulcrum", "version", "0.0.1")
-
-	// abstract main into run to maintain logging while processing termination signals
-	if err := run(); err != nil {
-		logger.Error("---MAIN FAILURE---", "error", err)
+	if err := logger.Init(slog.LevelInfo, "./var/log/simulcrum/simulcrum.log"); err != nil {
+		fmt.Fprintf(os.Stderr, "---LOGGER INIT FAILURE---: %v\n", err)
 		os.Exit(1)
 	}
+
+	fmt.Println("starting simulcrum", "version", "0.0.1")
 
 	// capture and process terminating signals
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
-	<-quit
-	logger.Info("shutting down application")
+	// abstract main into run to maintain logging while processing termination signals
+	if err := run(quit); err != nil {
+		fmt.Fprintf(os.Stderr, "---MAIN FAILURE---: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("simulcrum stopped")
 }
 
 // main application logic
-func run() error {
-	logger.Info("running")
+func run(quit <-chan os.Signal) error {
+	fmt.Println("running")
+
+	// service initialization
+	dnsServer, err := dns.New(dns.Config{
+		ListenAddr: "0.0.0.0:5053",
+		DefaultIP:  "127.0.0.1",
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize DNS server: %w", err)
+	}
+
+	// start services
+	errChan := make(chan error, 1)
+	go func() {
+		if err := dnsServer.Start(); err != nil {
+			errChan <- fmt.Errorf("failed to start DNS server: %w", err)
+		}
+	}()
+
+	select {
+	case err := <-errChan:
+		return fmt.Errorf("DNS server error: %w", err)
+	case <-quit:
+		fmt.Println("stopping services")
+		if err := dnsServer.Stop(); err != nil {
+			return fmt.Errorf("failed to stop DNS server: %w", err)
+		}
+	}
 
 	return nil
 }
