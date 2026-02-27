@@ -11,6 +11,7 @@ simulcrum provides deterministic DNS behavior for analysis, testing, and control
 - Configurable DNS response address
 - Optional upstream DNS liveness checks
 - DNS spoofing using a configurable CIDR subnet
+- Serves HTTP on configurable port
 - Structured logging for debugging and monitoring
 - Lightweight and easy to deploy
 - Written in Go
@@ -34,7 +35,7 @@ simulcrum provides deterministic DNS behavior for analysis, testing, and control
 - **enabled:** `true | false`  
   Controls whether the DNS server starts at launch.
 
-- **listen_addr:** `IP:PORT`  
+- **bind_addr:** `IP:PORT`  
   Address and port simulcrum binds to for snooping DNS traffic.
 
 - **analysis_ip:** `IP`  
@@ -52,15 +53,26 @@ simulcrum provides deterministic DNS behavior for analysis, testing, and control
 - **default_subnet:** `CIDR`  
   Subnet used to generate spoofed IPs.
 
+### http
+- **enabled:** `true | false`  
+  Controls whether the HTTP server starts at launch.
+
+- **bind_addr:** `IP:PORT`  
+  Address and port simulcrum binds to for serving HTTP traffic.
+- 
 ### Example
 ```yaml
-enabled: true
-listen_addr: 0.0.0.0:53
-analysis_ip: 192.168.117.128
-check_liveness: true
-upstream_dns: 9.9.9.9:53
-spoof_network: true
-default_subnet: 10.0.1.0/8
+dns:
+  enabled: true
+  bind_addr: 0.0.0.0:53
+  analysis_ip: 192.168.117.128
+  check_liveness: true
+  upstream_dns: 9.9.9.9:53
+  spoof_network: true
+  default_subnet: 10.0.1.0/8
+http:
+  enabled: true
+  bind_addr: 0.0.0.0:80
 ```
 
 ### Usage

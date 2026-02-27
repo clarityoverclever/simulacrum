@@ -23,15 +23,22 @@ import (
 
 type DnsConfig struct {
 	Enabled       bool   `yaml:"enabled"`
-	ListenAddr    string `yaml:"listen_addr"`
+	BindAddress   string `yaml:"bind_addr"`
 	AnalysisIP    string `yaml:"analysis_ip"`
 	CheckLiveness bool   `yaml:"check_liveness"`
 	UpstreamDNS   string `yaml:"upstream_dns"`
 	SpoofNetwork  bool   `yaml:"spoof_network"`
 	DefaultSubnet string `yaml:"default_subnet"`
 }
+
+type HttpConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	BindAddress string `yaml:"bind_addr"`
+}
+
 type Config struct {
-	DNS DnsConfig `yaml:"dns"`
+	DNS  DnsConfig  `yaml:"dns"`
+	HTTP HttpConfig `yaml:"http"`
 }
 
 func Load(path string) (*Config, error) {

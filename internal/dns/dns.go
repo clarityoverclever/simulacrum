@@ -29,7 +29,7 @@ import (
 )
 
 type Server struct {
-	addr          string
+	bindAddress   string
 	analysisIP    net.IP
 	dnsServer     *dns.Server
 	checkLiveness bool
@@ -43,7 +43,7 @@ type Server struct {
 
 type Config struct {
 	Enabled       bool
-	ListenAddr    string
+	BindAddress   string
 	AnalysisIP    string // IP returned for all queries
 	CheckLiveness bool   // use upstream DNS to test server liveness
 	UpstreamDNS   string // DNS server to forward queries
@@ -68,7 +68,7 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	server := &Server{
-		addr:          cfg.ListenAddr,
+		bindAddress:   cfg.BindAddress,
 		analysisIP:    ip,
 		checkLiveness: cfg.CheckLiveness,
 		upstreamDNS:   cfg.UpstreamDNS,
@@ -89,9 +89,9 @@ func New(cfg Config) (*Server, error) {
 func (s *Server) Start() error {
 	dns.HandleFunc(".", s.handleDNSRequest)
 
-	s.dnsServer = &dns.Server{Addr: s.addr, Net: "udp"}
+	s.dnsServer = &dns.Server{Addr: s.bindAddress, Net: "udp"}
 
-	fmt.Fprintf(os.Stdout, "DNS listening on: %s\n", s.addr)
+	fmt.Fprintf(os.Stdout, "DNS listening on: %s\n", s.bindAddress)
 
 	if err := s.dnsServer.ListenAndServe(); err != nil {
 		return fmt.Errorf("failed to start DNS server: %w", err)
@@ -105,6 +105,8 @@ func (s *Server) Stop() error {
 
 		// Clean up all DNAT rules
 		s.dnatLock.Lock()
+		fmt.Println("removing DNAT rules")
+
 		for domain, spoofedIP := range s.dnatMap {
 			if err := s.dnatManager.RemoveDNAT(spoofedIP); err != nil {
 				logger.Error("failed to remove DNAT", "domain", domain, "error", err)

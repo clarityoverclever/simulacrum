@@ -58,13 +58,13 @@ func (m *Manager) RemoveDNAT(spoofedIP string) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		logger.Error("failed to add DNAT rule",
+		logger.Error("failed to remove DNAT rule",
 			"spoofedIP", spoofedIP,
 			"analysisIP", m.analysisIP,
 			"error", err,
 			"output", string(output),
 		)
-		return fmt.Errorf("failed to add DNAT rule: %w", err)
+		return fmt.Errorf("failed to remove DNAT rule: %w", err)
 	}
 
 	return nil
