@@ -16,6 +16,8 @@ package http
 
 import (
 	"context"
+	"embed"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +27,9 @@ import (
 	"simulcrum/internal/logger"
 	"time"
 )
+
+//go:embed static/*
+var staticDir embed.FS
 
 type Server struct {
 	cfg    Config
@@ -77,7 +82,7 @@ func (s *Server) handleAll(w http.ResponseWriter, r *http.Request) {
 
 	val, ok := mimes[ext]
 	if ok {
-		s.serveFile(w, ext, val)
+		s.serveFile(w, leaf, ext, val)
 		return
 	}
 
@@ -87,18 +92,36 @@ func (s *Server) handleAll(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("<!DOCTYPE html><html><head><title>Simulcrum</title></head><body><center><h1>OK</h1></center></body></html>"))
 }
 
-func (s *Server) serveFile(w http.ResponseWriter, fileType string, contentType string) {
-	logger.Info("Serving fake payload", "file_type", fileType)
+func (s *Server) serveFile(w http.ResponseWriter, fileName string, fileType string, contentType string) {
+	logger.Info("Serving agent payload", "file_type", fileType)
 
 	switch fileType {
-	case ".exe", ".dll":
+	case ".exe", ".dll": // executable
 		w.Header().Set("Content-Type", contentType)
 
-		// generate a fake payload with exe header
+		// generate a payload with random binary data and an exe header
 		size := 1024*1024 + rand.Intn(4*1024*1024)
 		w.Write([]byte("MZ"))
 		size -= 2
 
+		io.CopyN(w, rand.New(rand.NewSource(time.Now().UnixNano())), int64(size))
+	case ".ps1":
+		w.Header().Set("Content-Disposition", `attachment; filename="`+fileName+`"`)
+		w.Header().Set("Content-Type", contentType)
+
+		// serve powershell payload
+		agent, err := staticDir.ReadFile("static/agent.ps1")
+		if err != nil {
+			logger.Error("failed to read powershell.ps1", "error", err)
+			return
+		}
+		w.Write(agent)
+
+	case ".dat": // binary data
+		w.Header().Set("Content-Type", contentType)
+
+		// generate a payload with random binary data
+		size := 1024*1024 + rand.Intn(4*1024*1024)
 		io.CopyN(w, rand.New(rand.NewSource(time.Now().UnixNano())), int64(size))
 	default:
 		return
