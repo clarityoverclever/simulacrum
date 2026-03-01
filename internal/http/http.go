@@ -24,7 +24,7 @@ import (
 	"math/rand"
 	"net/http"
 	"path/filepath"
-	"simulcrum/internal/logger"
+	"simulacrum/internal/logger"
 	"time"
 )
 
@@ -66,7 +66,7 @@ func (s *Server) Start() error {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	fmt.Println("Starting HTTP server on", s.cfg.BindAddress)
+	fmt.Println("HTTP listening on", s.cfg.BindAddress)
 	if err := s.Server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("failed to start HTTP server: %w", err)
 	}
@@ -91,7 +91,7 @@ func (s *Server) handleAll(w http.ResponseWriter, r *http.Request) {
 	// default serve a 200
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("<!DOCTYPE html><html><head><title>Simulcrum</title></head><body><center><h1>OK</h1></center></body></html>"))
+	w.Write([]byte("<!DOCTYPE html><html><head><title>simulacrum</title></head><body><center><h1>OK</h1></center></body></html>"))
 }
 
 func (s *Server) serveFile(w http.ResponseWriter, fileName string, fileType string, contentType string) {

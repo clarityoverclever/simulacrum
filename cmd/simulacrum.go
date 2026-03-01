@@ -19,10 +19,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"simulcrum/internal/config"
-	"simulcrum/internal/dns"
-	"simulcrum/internal/http"
-	"simulcrum/internal/logger"
+	"simulacrum/internal/config"
+	"simulacrum/internal/dns"
+	"simulacrum/internal/http"
+	"simulacrum/internal/logger"
+	"simulacrum/internal/ntp"
 	"syscall"
 )
 
@@ -37,12 +38,12 @@ func main() {
 	}
 
 	// init logger
-	if err := logger.Init(slog.LevelInfo, "./log/simulcrum.log"); err != nil {
+	if err := logger.Init(slog.LevelInfo, "./log/simulacrum.log"); err != nil {
 		fmt.Fprintf(os.Stderr, "---LOGGER INIT FAILURE---: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("starting simulcrum", "version", "0.1.4")
+	fmt.Println("starting simulacrum", "version", "0.1.5")
 
 	// capture and process terminating signals
 	quit := make(chan os.Signal, 1)
@@ -54,17 +55,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("simulcrum stopped")
+	fmt.Println("simulacrum stopped")
 }
 
 // main application logic
 func run(cfg *config.Config, quit <-chan os.Signal) error {
 	// service initialization
 	var err error
-	errChan := make(chan error, 2)
+	errChan := make(chan error, 3)
 
 	var dnsServer *dns.Server
 	var httpServer *http.Server
+	var ntpServer *ntp.Server
 
 	// start dns server
 	if cfg.DNS.Enabled {
@@ -106,7 +108,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		})
 
 		go func() {
-			if err := httpServer.Start(); err != nil {
+			if err = httpServer.Start(); err != nil {
 				errChan <- fmt.Errorf("failed to start HTTP server: %w", err)
 			}
 		}()
@@ -114,21 +116,39 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		fmt.Println("HTTP server not configured")
 	}
 
+	// Start NTP server
+	if cfg.NTP.Enabled {
+		fmt.Println("starting NTP server")
+
+		ntpServer = ntp.New(ntp.Config{
+			Enabled:     cfg.NTP.Enabled,
+			BindAddress: cfg.NTP.BindAddress,
+		})
+
+		go func() {
+			if err = ntpServer.Start(); err != nil {
+				errChan <- fmt.Errorf("failed to start NTP server: %w", err)
+			}
+		}()
+	} else {
+		fmt.Println("NTP server not configured")
+	}
+
 	// wait for an error or termination signal
 	select {
-	case err := <-errChan:
+	case err = <-errChan:
 		return err
 	case <-quit:
 		fmt.Println("stopping services")
 
 		if httpServer != nil {
-			if err := httpServer.Stop(); err != nil {
+			if err = httpServer.Stop(); err != nil {
 				logger.Error("failed to stop HTTP server", "error", err)
 			}
 		}
 
 		if dnsServer != nil {
-			if err := dnsServer.Stop(); err != nil {
+			if err = dnsServer.Stop(); err != nil {
 				return fmt.Errorf("failed to stop DNS server: %w", err)
 			}
 		}

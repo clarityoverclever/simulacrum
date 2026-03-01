@@ -1,9 +1,9 @@
 
 ---
-# Simulcrum
+# simulacrum
 
 ## Overview
-simulcrum provides deterministic DNS behavior for analysis, testing, and controlled environments. It replaces upstream DNS responses with either a static IP or a generated address from a spoofed subnet. The design emphasizes simplicity, transparency, and minimal overhead.
+Simulacrum provides deterministic DNS behavior for analysis, testing, and controlled environments. It replaces upstream DNS responses with either a static IP or a generated address from a spoofed subnet. The design emphasizes simplicity, transparency, and minimal overhead.
 
 ---
 
@@ -12,6 +12,8 @@ simulcrum provides deterministic DNS behavior for analysis, testing, and control
 - Optional upstream DNS liveness checks
 - DNS spoofing using a configurable CIDR subnet
 - Serves HTTP on configurable port
+- Optional spoofed HTTP request payload delivery
+- Serves NTP on configurable port
 - Structured logging for debugging and monitoring
 - Lightweight and easy to deploy
 - Written in Go
@@ -19,7 +21,7 @@ simulcrum provides deterministic DNS behavior for analysis, testing, and control
 ---
 
 ## How It Works
-1. simulcrum listens on a specified IP and port for DNS queries.
+1. simulacrum listens on a specified IP and port for DNS queries.
 2. Each query is intercepted and, depending on configuration, rewritten with:
     - A static `analysis_ip`
     - The IP of the upstream DNS server with local DNAT
@@ -37,7 +39,7 @@ file: ./config/config.yaml
   Controls whether the DNS server starts at launch.
 
 - **bind_addr:** `IP:PORT`  
-  Address and port simulcrum binds to for snooping DNS traffic.
+  Address and port simulacrum binds to for snooping DNS traffic.
 
 - **analysis_ip:** `IP`  
   The IP returned for all DNS queries when spoofing is disabled.
@@ -59,9 +61,20 @@ file: ./config/config.yaml
   Controls whether the HTTP server starts at launch.
 
 - **bind_addr:** `IP:PORT`  
-  Address and port simulcrum binds to for serving HTTP traffic.
+  Address and port simulacrum binds to for serving HTTP traffic.
+
 - **log_headers:** `true | false`  
   Enables logging of HTTP request headers.
+
+- **spoof_payload:** `true | false`  
+  Enables spoofing of HTTP request payloads.
+
+### ntp
+- **enabled:** `true | false`  
+  Controls whether the NTP server starts at launch.
+
+- **bind_addr:** `IP:PORT`  
+  Address and port serving NTP.
 ### Example
 ```yaml
 dns:
@@ -75,12 +88,17 @@ dns:
 http:
   enabled: true
   bind_addr: 0.0.0.0:80
+  log_headers: false
+  spoof_payload: false
+ntp:
+  enabled: true
+  bind_addr: 0.0.0.0:123
 ```
 
 ### Usage
 1. Edit the configuration file with your desired settings.
 2. Ensure the listening port (typically 53) is available.
-3. Start simulcrum (root/sudo recommended for privileged ports).
+3. Start simulacrum (root/sudo recommended for privileged ports).
 4. Query the DNS server and observe rewritten responses.
 
 ### Notes

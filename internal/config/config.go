@@ -38,9 +38,15 @@ type HttpConfig struct {
 	SpoofPayload bool   `yaml:"spoof_payload"`
 }
 
+type NtpConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	BindAddress string `yaml:"bind_addr"`
+}
+
 type Config struct {
 	DNS  DnsConfig  `yaml:"dns"`
 	HTTP HttpConfig `yaml:"http"`
+	NTP  NtpConfig  `yaml:"ntp"`
 }
 
 func Load(path string) (*Config, error) {
