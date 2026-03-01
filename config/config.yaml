@@ -14,3 +14,8 @@ http:
 ntp:
   enabled: true
   bind_addr: 0.0.0.0:123
+  mode: passthrough
+  upstream_ntp: 0.pool.ntp.org:123
+  multiplier:
+
+

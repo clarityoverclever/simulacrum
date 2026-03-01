@@ -68,7 +68,6 @@ func (s *Server) Start() error {
 		fmt.Printf("NTP packet received from: %s\n", remoteAddr.String())
 
 		response := make([]byte, 48)
-		// Byte 0: LI(0), VN(4), Mode(4)
 		// 0x24 = 00 100 100 (No warning, NTP v4, Server Mode)
 		response[0] = 0x24
 
@@ -93,7 +92,7 @@ func (s *Server) Start() error {
 		response[10] = 0x00
 		response[11] = 0x0f
 
-		// Bytes 12-15: Reference ID (The "source")
+		// Bytes 12-23: Reference ID (The "source")
 		copy(response[12:21], "Simulacrum")
 
 		// Bytes 24-31: Requestor timestamp
