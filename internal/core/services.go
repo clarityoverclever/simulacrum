@@ -24,20 +24,20 @@ const (
 	StatusError   Status = "error"
 )
 
-type ControlActon string
+type ControlAction string
 
 const (
-	ActionStart   ControlActon = "start"
-	ActionStop    ControlActon = "stop"
-	ActionRestart ControlActon = "restart"
-	ActionStatus  ControlActon = "status"
-	ActionUpdate  ControlActon = "update"
+	ActionStart   ControlAction = "start"
+	ActionStop    ControlAction = "stop"
+	ActionRestart ControlAction = "restart"
+	ActionStatus  ControlAction = "status"
+	ActionUpdate  ControlAction = "update"
 )
 
 type ControlMessage struct {
-	Action  ControlActon      `json:"action"`
-	Service string            `json:"service"`
-	Params  map[string]string `json:"params,omitempty"`
+	Action  ControlAction  `json:"action"`
+	Service string         `json:"service"`
+	Params  map[string]any `json:"params,omitempty"`
 }
 
 type ControlResponse struct {
