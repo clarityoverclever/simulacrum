@@ -60,14 +60,14 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	var err error
 	errChan := make(chan error, 1)
 
-	fmt.Println("IPC starting")
+	fmt.Println("[ipc] initializing service")
 	sockMan, err := core.New("/tmp/simulacrum")
 	if err != nil {
 		return err
 	}
 
 	defer sockMan.Close("/tmp/simulacrum")
-	fmt.Println("IPC started")
+	fmt.Println("[ipc] service started")
 
 	services := []core.Service{
 		dns.Init(dns.Config{

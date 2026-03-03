@@ -32,7 +32,7 @@ type Pool struct {
 func New(cidr string) (*Pool, error) {
 	_, subnet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid CIDR: %w", err)
+		return nil, fmt.Errorf("[pool] invalid CIDR: %w", err)
 	}
 
 	return &Pool{
@@ -56,7 +56,7 @@ func (p *Pool) Allocate() (net.IP, error) {
 	maxHosts := (1 << hostBits) - 2 // Exclude network and broadcast
 
 	if maxHosts <= 0 {
-		return nil, fmt.Errorf("subnet too small")
+		return nil, fmt.Errorf("[pool] subnet too small")
 	}
 
 	// Try to find an unused IP (max 100 attempts)
@@ -83,7 +83,7 @@ func (p *Pool) Allocate() (net.IP, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("failed to allocate unique IP after 100 attempts")
+	return nil, fmt.Errorf("[pool] failed to allocate unique IP after 100 attempts")
 }
 
 // IsAllocated checks if an IP is already in use

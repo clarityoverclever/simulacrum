@@ -26,3 +26,12 @@
 {"time":"2026-03-02T19:33:01.455139861-08:00","level":"INFO","msg":"dns query","domain":"redhat.org","type":"AAAA","client":"127.0.0.1:33170"}
 {"time":"2026-03-02T19:33:01.493436812-08:00","level":"INFO","msg":"upstream DNS check succeeded","domain":"redhat.org.","type":"AAAA","upstream_ip":""}
 {"time":"2026-03-02T19:33:01.493521874-08:00","level":"INFO","msg":"ignoring AAAA query","domain":"redhat.org."}
+{"time":"2026-03-04T06:15:31.786444011-08:00","level":"INFO","msg":"[dns] query","domain":"redhat.org","type":"A","client":"127.0.0.1:54184"}
+{"time":"2026-03-04T06:15:31.828150706-08:00","level":"INFO","msg":"[dns] upstream DNS check succeeded","domain":"redhat.org.","type":"A","upstream_ip":"34.235.198.240"}
+{"time":"2026-03-04T06:15:31.82824994-08:00","level":"INFO","msg":"[dnat] adding DNAT rule","spoofedIP":"34.235.198.240","analysisIP":"192.168.117.128"}
+{"time":"2026-03-04T06:15:31.831158438-08:00","level":"ERROR","msg":"[dnat] failed to add rule","spoofedIP":"34.235.198.240","analysisIP":"192.168.117.128","error":"exit status 2","output":"iptables v1.8.7 (nf_tables): unknown option \"--to-destination\"\nTry `iptables -h' or 'iptables --help' for more information.\n"}
+{"time":"2026-03-04T06:15:31.831214352-08:00","level":"ERROR","msg":"[dns] failed to add DNAT","error":"[dnat] failed to add rule: exit status 2"}
+{"time":"2026-03-04T06:15:31.831230291-08:00","level":"INFO","msg":"[dns] response","domain":"redhat.org","returned_ip":"192.168.117.128","spoofed":true}
+{"time":"2026-03-04T06:15:31.832493624-08:00","level":"INFO","msg":"[dns] query","domain":"redhat.org","type":"AAAA","client":"127.0.0.1:38933"}
+{"time":"2026-03-04T06:15:31.872161485-08:00","level":"INFO","msg":"[dns] upstream DNS check succeeded","domain":"redhat.org.","type":"AAAA","upstream_ip":""}
+{"time":"2026-03-04T06:15:31.872247033-08:00","level":"INFO","msg":"[dns] ignoring AAAA query","domain":"redhat.org."}

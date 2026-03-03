@@ -20,6 +20,7 @@ import (
 	"io"
 	"net"
 	"simulacrum/internal/core"
+	"strconv"
 	"sync"
 )
 
@@ -31,20 +32,7 @@ type Service struct {
 }
 
 func Init(cfg Config) *Service {
-	fmt.Println("initializing dns")
-	if cfg.Enabled {
-		service := &Service{
-			state:  core.StatusStopped,
-			config: cfg,
-		}
-		err := service.start()
-		if err != nil {
-			fmt.Printf("[dns] failed to start: %v\n", err)
-		}
-
-		return service
-	}
-
+	fmt.Println("[dns] initializing service")
 	return &Service{
 		state:  core.StatusStopped,
 		config: cfg,
@@ -56,6 +44,12 @@ func (s *Service) Name() string {
 }
 
 func (s *Service) Run(l net.Listener) error {
+	if s.config.Enabled {
+		if err := s.start(); err != nil {
+			fmt.Printf("[dns] failed to start server: %v\n", err)
+		}
+	}
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -75,7 +69,7 @@ func (s *Service) handleConnection(conn net.Conn) {
 	var msg core.ControlMessage
 	if err := dec.Decode(&msg); err != nil {
 		if err != io.EOF {
-			fmt.Printf("[dns] decode error: %v\n", err)
+			fmt.Printf("[dns] control message decode error: %v\n", err)
 		}
 		return
 	}
@@ -87,25 +81,52 @@ func (s *Service) handleConnection(conn net.Conn) {
 		if err := s.start(); err != nil {
 			resp = core.ControlResponse{Status: "error", Message: err.Error()}
 		} else {
-			resp = core.ControlResponse{Status: "ok", Message: "dns started"}
+			resp = core.ControlResponse{Status: "ok", Message: "[dns] server started"}
 		}
 	case core.ActionStop:
 		if err := s.stop(); err != nil {
 			resp = core.ControlResponse{Status: "error", Message: err.Error()}
 		} else {
-			resp = core.ControlResponse{Status: "ok", Message: "dns stopped"}
+			resp = core.ControlResponse{Status: "ok", Message: "[dns] server stopped"}
 		}
 	case core.ActionStatus:
-		resp = core.ControlResponse{Status: "ok", Message: string(s.getState())}
+		resp = core.ControlResponse{Status: "ok", Message: string("[dns] server " + s.getState())}
 	case core.ActionRestart:
 		if err := s.restart(); err != nil {
 			resp = core.ControlResponse{Status: "error", Message: err.Error()}
 		} else {
-			resp = core.ControlResponse{Status: "ok", Message: "dns restarted"}
+			resp = core.ControlResponse{Status: "ok", Message: "[dns] server restarted"}
 		}
 	case core.ActionUpdate:
-		fmt.Println("dns updated")
-		resp = core.ControlResponse{Status: "ok", Message: "nothing to update on static service"}
+		var key, value string
+		for k, v := range msg.Params {
+			key = k
+			switch val := v.(type) {
+			case string:
+				value = val
+			case int:
+				value = strconv.Itoa(val)
+			case float64:
+				value = fmt.Sprintf("%g", v)
+			case bool:
+				value = strconv.FormatBool(val)
+			default:
+				fmt.Printf("unknown type for key %s: %v\n", k, v)
+			}
+		}
+
+		switch key {
+		case "dnat":
+			if value == "flush" {
+				err := s.server.dnatManager.FlushAll()
+				if err != nil {
+					resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("failed to flush dnat table: %v", err)}
+				}
+				resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[dns] dnat table flushed")}
+			}
+		default:
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[dns] unknown update action %s %s", key, value)}
+		}
 	default:
 		resp = core.ControlResponse{Status: "error", Message: "unknown action"}
 	}
@@ -118,17 +139,16 @@ func (s *Service) start() error {
 	defer s.mu.Unlock()
 
 	if s.state == core.StatusRunning {
-		return fmt.Errorf("dns server already running")
+		return fmt.Errorf("[dns] server already running")
 	}
 
 	var err error
 	s.server, err = New(s.config)
 	if err != nil {
 		s.state = core.StatusError
-		return fmt.Errorf("failed to create DNS server: %w", err)
+		return fmt.Errorf("[dns] failed to create server: %w", err)
 	}
 
-	// Start DNS server in a goroutine since it blocks
 	go func() {
 		if err := s.server.Start(); err != nil {
 			s.setState(core.StatusError)
@@ -137,7 +157,7 @@ func (s *Service) start() error {
 	}()
 
 	s.state = core.StatusRunning
-	fmt.Println("dns started")
+	fmt.Println("[dns] server started")
 	return nil
 }
 
@@ -146,18 +166,18 @@ func (s *Service) stop() error {
 	defer s.mu.Unlock()
 
 	if s.state != core.StatusRunning {
-		return fmt.Errorf("dns server not running")
+		return fmt.Errorf("[dns] server not running")
 	}
 
 	if s.server != nil {
 		if err := s.server.Stop(); err != nil {
 			s.state = core.StatusError
-			return fmt.Errorf("failed to stop DNS server: %w", err)
+			return fmt.Errorf("[dns] failed to stop server: %w", err)
 		}
 	}
 
 	s.state = core.StatusStopped
-	fmt.Println("dns stopped")
+	fmt.Println("[dns] server stopped")
 	return nil
 }
 

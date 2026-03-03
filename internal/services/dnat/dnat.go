@@ -29,7 +29,7 @@ func New(analysisIP string) *Manager {
 }
 
 func (m *Manager) AddDNAT(spoofedIP string) error {
-	logger.Info("adding DNAT rule",
+	logger.Info("[dnat] adding DNAT rule",
 		"spoofedIP", spoofedIP,
 		"analysisIP", m.analysisIP,
 	)
@@ -37,20 +37,20 @@ func (m *Manager) AddDNAT(spoofedIP string) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		logger.Error("failed to add DNAT rule",
+		logger.Error("[dnat] failed to add rule",
 			"spoofedIP", spoofedIP,
 			"analysisIP", m.analysisIP,
 			"error", err,
 			"output", string(output),
 		)
-		return fmt.Errorf("failed to add DNAT rule: %w", err)
+		return fmt.Errorf("[dnat] failed to add rule: %w", err)
 	}
 
 	return nil
 }
 
 func (m *Manager) RemoveDNAT(spoofedIP string) error {
-	logger.Info("adding DNAT rule",
+	logger.Info("[dnat] removing rule",
 		"spoofedIP", spoofedIP,
 		"analysisIP", m.analysisIP,
 	)
@@ -58,13 +58,13 @@ func (m *Manager) RemoveDNAT(spoofedIP string) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		logger.Error("failed to remove DNAT rule",
+		logger.Error("[dnat] failed to remove rule",
 			"spoofedIP", spoofedIP,
 			"analysisIP", m.analysisIP,
 			"error", err,
 			"output", string(output),
 		)
-		return fmt.Errorf("failed to remove DNAT rule: %w", err)
+		return fmt.Errorf("[dnat] failed to remove rule: %w", err)
 	}
 
 	return nil

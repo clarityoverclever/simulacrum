@@ -54,7 +54,7 @@ type Config struct {
 func New(cfg Config) (*Server, error) {
 	ip := net.ParseIP(cfg.AnalysisIP)
 	if ip == nil {
-		return nil, fmt.Errorf("invalid analysis IP address: %s", cfg.AnalysisIP)
+		return nil, fmt.Errorf("[dns] invalid analysis IP address: %s", cfg.AnalysisIP)
 	}
 
 	var pool *ippool.Pool
@@ -63,7 +63,7 @@ func New(cfg Config) (*Server, error) {
 		var err error
 		pool, err = ippool.New(cfg.DefaultSubnet)
 		if err != nil {
-			return nil, fmt.Errorf("invalid default subnet: %w", err)
+			return nil, fmt.Errorf("[dns] invalid default subnet: %w", err)
 		}
 	}
 
@@ -80,7 +80,7 @@ func New(cfg Config) (*Server, error) {
 
 	// validate upstream DNS if liveness check is enabled
 	if server.checkLiveness && server.upstreamDNS == "" {
-		return nil, fmt.Errorf("upstream DNS required for liveness check")
+		return nil, fmt.Errorf("[dns] upstream DNS required for liveness check")
 	}
 
 	return server, nil
@@ -91,25 +91,25 @@ func (s *Server) Start() error {
 
 	s.dnsServer = &dns.Server{Addr: s.bindAddress, Net: "udp"}
 
-	fmt.Fprintf(os.Stdout, "DNS listening on: %s\n", s.bindAddress)
+	fmt.Fprintf(os.Stdout, "[dns] listening on: %s\n", s.bindAddress)
 
 	if err := s.dnsServer.ListenAndServe(); err != nil {
-		return fmt.Errorf("failed to start DNS server: %w", err)
+		return fmt.Errorf("[dns] failed to open listener: %w", err)
 	}
 	return nil
 }
 
 func (s *Server) Stop() error {
 	if s.dnsServer != nil {
-		fmt.Println("stopping DNS server")
+		fmt.Println("[dns] stopping server")
 
 		// Clean up all DNAT rules
 		s.dnatLock.Lock()
-		fmt.Println("removing DNAT rules")
+		fmt.Println("[dns] removing DNAT rules")
 
 		for domain, spoofedIP := range s.dnatMap {
 			if err := s.dnatManager.RemoveDNAT(spoofedIP); err != nil {
-				logger.Error("failed to remove DNAT", "domain", domain, "error", err)
+				logger.Error("[dns] failed to remove DNAT", "domain", domain, "error", err)
 			}
 		}
 		s.dnatLock.Unlock()
@@ -138,7 +138,7 @@ func (s *Server) resolveUpstream(domain string, qtype uint16) (bool, net.IP) {
 
 	r, _, err := c.Exchange(m, s.upstreamDNS)
 	if err != nil {
-		logger.Warn("upstream DNS check failed",
+		logger.Warn("[dns] upstream DNS check failed",
 			"domain", domain,
 			"error", err,
 			"type", dns.TypeToString[qtype])
@@ -157,20 +157,20 @@ func (s *Server) resolveUpstream(domain string, qtype uint16) (bool, net.IP) {
 				}
 			}
 		}
-		logger.Info("upstream DNS check succeeded",
+		logger.Info("[dns] upstream DNS check succeeded",
 			"domain", domain,
 			"type", dns.TypeToString[qtype],
 			"upstream_ip", upstreamIP,
 		)
 		return true, upstreamIP
 	case dns.RcodeNameError: // NXDOMAIN
-		logger.Info("upstream DNS check failed",
+		logger.Info("[dns] upstream DNS check failed",
 			"domain", domain,
 			"error", "NXDOMAIN",
 		)
 		return false, nil
 	default:
-		logger.Warn("upstream DNS check failed",
+		logger.Warn("[dns] upstream DNS check failed",
 			"domain", domain,
 			"rcode", dns.RcodeToString[r.Rcode],
 		)
@@ -187,7 +187,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	for _, question := range r.Question {
 		domain := strings.TrimSuffix(question.Name, ".")
 
-		logger.Info("dns query",
+		logger.Info("[dns] query",
 			"domain", domain,
 			"type", dns.TypeToString[question.Qtype],
 			"client", w.RemoteAddr().String(),
@@ -199,10 +199,10 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		if !exists {
 			// return NXDOMAIN if upstream check fails
 			msg.SetRcode(r, dns.RcodeNameError)
-			logger.Info("returning NXDOMAIN for non-existent domain", "domain", domain)
+			logger.Info("[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
 
 			if err = w.WriteMsg(msg); err != nil {
-				fmt.Fprintf(os.Stderr, "failed to write DNS response: %v\n", err)
+				fmt.Fprintf(os.Stderr, "[dns] failed to write response: %v\n", err)
 			}
 
 			return
@@ -218,14 +218,14 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 				// use default subnet if upstream IP is not available
 				responseIP, err = s.ipPool.Allocate()
 				if err != nil {
-					logger.Error("failed to allocate IP from pool", "error", err)
+					logger.Error("[dns] failed to allocate IP from pool", "error", err)
 					responseIP = s.analysisIP
 				}
 			}
 
 			// add DNAT rule
 			if err := s.dnatManager.AddDNAT(responseIP.String()); err != nil {
-				logger.Error("failed to add DNAT", "error", err)
+				logger.Error("[dns] failed to add DNAT", "error", err)
 				// Fall back to analysis IP
 				responseIP = s.analysisIP
 			} else {
@@ -249,21 +249,21 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 				A: responseIP,
 			})
 
-			logger.Info("dns response",
+			logger.Info("[dns] response",
 				"domain", domain,
 				"returned_ip", responseIP.String(),
 				"spoofed", s.SpoofNetwork,
 			)
 		case dns.TypeAAAA:
-			logger.Info("ignoring AAAA query", "domain", question.Name)
+			logger.Info("[dns] ignoring AAAA query", "domain", question.Name)
 		case dns.TypeMX, dns.TypeNS, dns.TypeCNAME, dns.TypeTXT:
-			logger.Info("ignoring unsupported query", "type", dns.TypeToString[question.Qtype])
+			logger.Info("[dns] ignoring unsupported query", "type", dns.TypeToString[question.Qtype])
 		default:
-			logger.Info("unknown query type", "type", question.Qtype)
+			logger.Info("[dns] unknown query type", "type", question.Qtype)
 		}
 	}
 
 	if err := w.WriteMsg(msg); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to write DNS response: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[dns] failed to write response: %v\n", err)
 	}
 }

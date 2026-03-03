@@ -14,7 +14,12 @@
 
 package core
 
-import "net"
+import (
+	"encoding/json"
+	"fmt"
+	"net"
+	"os"
+)
 
 type Status string
 
@@ -48,4 +53,35 @@ type ControlResponse struct {
 type Service interface {
 	Name() string
 	Run(listener net.Listener) error
+}
+
+func SendControlMessage(message ControlMessage) error {
+	sockMan, err := New("/tmp/simulacrum")
+	if err != nil {
+		fmt.Printf("Failed to create socket manager: %v\n", err)
+		os.Exit(1)
+	}
+
+	path := sockMan.Path(message.Service)
+	conn, err := net.Dial("unix", path)
+	if err != nil {
+		fmt.Println("Failed to connect to socket:", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+
+	enc := json.NewEncoder(conn)
+	dec := json.NewDecoder(conn)
+
+	if err := enc.Encode(message); err != nil {
+		fmt.Println("Failed to send message:", err)
+	}
+
+	var response ControlResponse
+	if err := dec.Decode(&response); err != nil {
+		fmt.Println("Failed to receive response:", err)
+	}
+
+	fmt.Println(response)
+	return nil
 }
