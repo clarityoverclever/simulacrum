@@ -41,13 +41,12 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{}
 
 	configDir := filepath.Dir(path)
-	configFile := filepath.Base(path)
 
 	if err = os.MkdirAll(configDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create configuration directory: %w", err)
 	}
 
-	if _, err = os.Stat(configFile); err != nil {
+	if _, err = os.Stat(path); os.IsNotExist(err) {
 		//  TODO: add config file template from embedded resources
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {

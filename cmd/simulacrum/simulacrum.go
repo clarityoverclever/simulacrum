@@ -58,7 +58,7 @@ func main() {
 
 func run(cfg *config.Config, quit <-chan os.Signal) error {
 	var err error
-	errChan := make(chan error, 1)
+	errChan := make(chan error, 2)
 
 	fmt.Println("[ipc] initializing service")
 	sockMan, err := core.New("/tmp/simulacrum")

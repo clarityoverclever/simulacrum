@@ -79,13 +79,13 @@ func (s *Service) handleConnection(conn net.Conn) {
 	switch msg.Action {
 	case core.ActionStart:
 		if err := s.start(); err != nil {
-			resp = core.ControlResponse{Status: "error", Message: err.Error()}
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[dns] %v", err.Error())}
 		} else {
 			resp = core.ControlResponse{Status: "ok", Message: "[dns] server started"}
 		}
 	case core.ActionStop:
 		if err := s.stop(); err != nil {
-			resp = core.ControlResponse{Status: "error", Message: err.Error()}
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[dns] %v", err.Error())}
 		} else {
 			resp = core.ControlResponse{Status: "ok", Message: "[dns] server stopped"}
 		}
@@ -93,7 +93,7 @@ func (s *Service) handleConnection(conn net.Conn) {
 		resp = core.ControlResponse{Status: "ok", Message: string("[dns] server " + s.getState())}
 	case core.ActionRestart:
 		if err := s.restart(); err != nil {
-			resp = core.ControlResponse{Status: "error", Message: err.Error()}
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[dns] %v", err.Error())}
 		} else {
 			resp = core.ControlResponse{Status: "ok", Message: "[dns] server restarted"}
 		}
@@ -120,7 +120,7 @@ func (s *Service) handleConnection(conn net.Conn) {
 			if value == "flush" {
 				err := s.server.dnatManager.FlushAll()
 				if err != nil {
-					resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("failed to flush dnat table: %v", err)}
+					resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[dns] failed to flush dnat table: %v", err)}
 				}
 				resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[dns] dnat table flushed")}
 			}
@@ -128,7 +128,7 @@ func (s *Service) handleConnection(conn net.Conn) {
 			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[dns] unknown update action %s %s", key, value)}
 		}
 	default:
-		resp = core.ControlResponse{Status: "error", Message: "unknown action"}
+		resp = core.ControlResponse{Status: "error", Message: "[dns] unknown action"}
 	}
 
 	_ = enc.Encode(resp)
