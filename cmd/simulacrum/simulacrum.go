@@ -25,6 +25,7 @@ import (
 	"simulacrum/internal/services/dns"
 	"simulacrum/internal/services/http"
 	"simulacrum/internal/services/logger"
+	"simulacrum/internal/services/ntp"
 	"syscall"
 )
 
@@ -86,6 +87,14 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			BindAddress:  cfg.HTTP.BindAddress,
 			LogHeaders:   cfg.HTTP.LogHeaders,
 			SpoofPayload: cfg.HTTP.SpoofPayload,
+		}),
+
+		ntp.Init(ntp.Config{
+			Enabled:     cfg.NTP.Enabled,
+			BindAddress: cfg.NTP.BindAddress,
+			Mode:        cfg.NTP.Mode,
+			UpstreamNTP: cfg.NTP.UpstreamNTP,
+			Multiplier:  cfg.NTP.Multiplier,
 		}),
 	}
 

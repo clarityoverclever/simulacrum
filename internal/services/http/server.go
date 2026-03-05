@@ -74,6 +74,21 @@ func (s *Server) Start() error {
 	return nil
 }
 
+func (s *Server) Stop() error {
+	if s.Server != nil {
+		fmt.Println("[http] Stopping server")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := s.Server.Shutdown(ctx); err != nil {
+			fmt.Println("server shutdown failed:", err)
+		}
+	}
+
+	return nil
+}
+
 func (s *Server) handleAll(w http.ResponseWriter, r *http.Request) {
 	s.logRequest(r)
 
@@ -152,19 +167,4 @@ func (s *Server) logRequest(r *http.Request) {
 			)
 		}
 	}
-}
-
-func (s *Server) Stop() error {
-	if s.Server != nil {
-		fmt.Println("[http] Stopping server")
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		if err := s.Server.Shutdown(ctx); err != nil {
-			fmt.Println("server shutdown failed:", err)
-		}
-	}
-
-	return nil
 }

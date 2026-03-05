@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"simulacrum/cmd/simctl/cmd/http"
-
 	"simulacrum/cmd/simctl/cmd/dns"
+	"simulacrum/cmd/simctl/cmd/http"
+	"simulacrum/cmd/simctl/cmd/ntp"
 
 	"github.com/spf13/cobra"
 )
@@ -25,4 +25,5 @@ func Execute() {
 func init() {
 	rootCmd.AddCommand(dns.DnsCmd)
 	rootCmd.AddCommand(http.HttpCmd)
+	rootCmd.AddCommand(ntp.NtpCmd)
 }
