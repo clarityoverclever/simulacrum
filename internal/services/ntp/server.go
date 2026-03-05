@@ -24,27 +24,32 @@ import (
 )
 
 type Server struct {
-	cfg    Config
-	conn   *net.UDPConn
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	cfg          Config
+	baseTime     int64
+	baseRealTime int64
+	multiplier   float64
+	mutex        sync.RWMutex
+	conn         *net.UDPConn
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
 }
 
 type Config struct {
 	Enabled     bool
 	BindAddress string
-	Mode        string
-	UpstreamNTP string
-	Multiplier  float64
+	Offset      float64
 }
 
 func New(cfg Config) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
-		cfg:    cfg,
-		ctx:    ctx,
-		cancel: cancel,
+		cfg:          cfg,
+		baseTime:     time.Now().Unix(),
+		baseRealTime: time.Now().Unix(),
+		multiplier:   cfg.Offset,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 }
 
@@ -66,6 +71,42 @@ func (s *Server) Start() error {
 
 	<-s.ctx.Done()
 	return nil
+}
+
+func (s *Server) Stop() error {
+	fmt.Println("[ntp] stopping server")
+
+	// Signal shutdown
+	s.cancel()
+
+	// Close the connection
+	if s.conn != nil {
+		if err := s.conn.Close(); err != nil {
+			return fmt.Errorf("error closing NTP connection: %w", err)
+		}
+	}
+
+	// Wait for the goroutine to finish
+	s.wg.Wait()
+
+	return nil
+}
+
+func (s *Server) GetMultiplier() float64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.multiplier
+}
+
+func (s *Server) SetMultiplier(multiplier float64) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	now := time.Now().Unix()
+	elapsed := now - s.baseRealTime
+	s.baseTime = s.baseTime + int64(float64(elapsed)*s.multiplier)
+	s.baseRealTime = now
+	s.multiplier = multiplier
 }
 
 func (s *Server) serve() {
@@ -93,6 +134,18 @@ func (s *Server) serve() {
 			originTimestamp := buf[40:48]
 			fmt.Printf("[ntp] packet received from: %s\n", remoteAddr.String())
 
+			s.mutex.RLock()
+			realElapsed := time.Now().Unix() - s.baseRealTime
+
+			adjustedElapsed := int64(float64(realElapsed) * s.multiplier)
+
+			adjustedTime := s.baseTime + adjustedElapsed + 2208988800 // Unix epoch to go epoch conversion
+			s.mutex.RUnlock()
+
+			now := time.Now()
+			seconds := uint32(adjustedTime)
+			fraction := uint32(float64(now.UnixNano()%1e9) * 4.294967296) // Convert nanoseconds to NTP fraction
+
 			response := make([]byte, 48)
 			response[0] = 0x24
 			response[1] = 0x02
@@ -106,14 +159,40 @@ func (s *Server) serve() {
 			response[9] = 0x00
 			response[10] = 0x00
 			response[11] = 0x0f
-			copy(response[12:22], "ntp.sim.org")
+			//copy(response[12:22], "ntp.sim.org")
+
+			// reference Timestamp (bytes 16-23)
+			response[16] = byte(seconds >> 24)
+			response[17] = byte(seconds >> 16)
+			response[18] = byte(seconds >> 8)
+			response[19] = byte(seconds)
+			response[20] = byte(fraction >> 24)
+			response[21] = byte(fraction >> 16)
+			response[22] = byte(fraction >> 8)
+			response[23] = byte(fraction)
+
+			// origin timestamp (bytes 24-31
 			copy(response[24:32], originTimestamp)
 
-			now := time.Now().Unix() + 2208988800 // Unix epoch to go epoch conversion
-			response[40] = byte(now >> 24)
-			response[41] = byte(now >> 16)
-			response[42] = byte(now >> 8)
-			response[43] = byte(now)
+			// receive Timestamp (bytes 32-39)
+			response[32] = byte(seconds >> 24)
+			response[33] = byte(seconds >> 16)
+			response[34] = byte(seconds >> 8)
+			response[35] = byte(seconds)
+			response[36] = byte(fraction >> 24)
+			response[37] = byte(fraction >> 16)
+			response[38] = byte(fraction >> 8)
+			response[39] = byte(fraction)
+
+			// transmit Timestamp (bytes 40-47)
+			response[40] = byte(seconds >> 24)
+			response[41] = byte(seconds >> 16)
+			response[42] = byte(seconds >> 8)
+			response[43] = byte(seconds)
+			response[44] = byte(fraction >> 24)
+			response[45] = byte(fraction >> 16)
+			response[46] = byte(fraction >> 8)
+			response[47] = byte(fraction)
 
 			_, err = s.conn.WriteToUDP(response, remoteAddr)
 			if err != nil {
@@ -123,25 +202,7 @@ func (s *Server) serve() {
 
 			logger.Info("[ntp] packet processed", "read", string(buf), "wrote", string(response))
 			fmt.Printf("[ntp] packet sent to %s\n", remoteAddr.String())
+			fmt.Printf("[ntp] multiplier: %f\n", s.multiplier)
 		}
 	}
-}
-
-func (s *Server) Stop() error {
-	fmt.Println("[ntp] stopping server")
-
-	// Signal shutdown
-	s.cancel()
-
-	// Close the connection
-	if s.conn != nil {
-		if err := s.conn.Close(); err != nil {
-			return fmt.Errorf("error closing NTP connection: %w", err)
-		}
-	}
-
-	// Wait for goroutine to finish
-	s.wg.Wait()
-
-	return nil
 }

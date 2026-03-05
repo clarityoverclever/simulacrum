@@ -117,18 +117,18 @@ func (s *Service) handleConnection(conn net.Conn) {
 			fmt.Printf("key: %s, value: %s\n", key, value)
 		}
 
-		//switch key {
-		//case "dnat":
-		//	if value == "flush" {
-		//		err := s.server.dnatManager.FlushAll()
-		//		if err != nil {
-		//			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[ntp] failed to flush dnat table: %v", err)}
-		//		}
-		//		resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[ntp] dnat table flushed")}
-		//	}
-		//default:
-		//	resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[ntp] unknown update action %s %s", key, value)}
-		//}
+		switch key {
+		case "multiplier":
+			multiplier, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[ntp] failed to set multiplier: %v", err)}
+			} else {
+				s.server.SetMultiplier(multiplier)
+				resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[ntp] multiplier set to %s", value)}
+			}
+		default:
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[ntp] unknown update action %s %s", key, value)}
+		}
 	default:
 		resp = core.ControlResponse{Status: "error", Message: "[ntp] unknown action"}
 	}

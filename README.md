@@ -26,6 +26,7 @@ Simulacrum aims to provide deterministic network behavior for analysis and testi
 
 ### NTP
 - Serves NTP
+- Supports adding a time multiplier to NTP datagram
 
 ---
 
@@ -97,6 +98,10 @@ file: ./config/config.yaml
 
 - **bind_addr:** `IP:PORT`  
   Address and port serving NTP.
+
+- **multiplier:** `float`  
+  Multiplier applied to NTP timestamps.
+
 ### Example
 ```yaml
 dns:

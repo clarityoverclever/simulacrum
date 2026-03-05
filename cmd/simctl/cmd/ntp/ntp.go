@@ -1,6 +1,8 @@
 package ntp
 
 import (
+	"simulacrum/cmd/simctl/cmd/ntp/update"
+
 	"github.com/spf13/cobra"
 )
 
@@ -10,4 +12,6 @@ func init() {
 	NtpCmd.AddCommand(ntpStartCmd)
 	NtpCmd.AddCommand(ntpStopCmd)
 	NtpCmd.AddCommand(ntpStatusCmd)
+
+	NtpCmd.AddCommand(update.NtpUpdateCmd)
 }
