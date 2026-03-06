@@ -18,11 +18,13 @@ import (
 	"context"
 	"embed"
 	_ "embed"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"path/filepath"
 	"simulacrum/internal/services/logger"
 	"time"
@@ -41,6 +43,7 @@ type Config struct {
 	BindAddress  string
 	LogHeaders   bool
 	SpoofPayload bool
+	MaxBodyBytes int64
 }
 
 var mimes = map[string]string{
@@ -55,9 +58,13 @@ func New(cfg Config) (*Server, error) {
 }
 
 func (s *Server) Start() error {
+	if !s.cfg.Enabled {
+		return nil
+	}
+
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/{path...}", s.handleAll)
+	mux.HandleFunc("/{path...}", s.handleRequest)
 
 	s.Server = &http.Server{
 		Addr:         s.cfg.BindAddress,
@@ -89,9 +96,21 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-func (s *Server) handleAll(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	s.logRequest(r)
 
+	switch r.Method {
+	case "GET":
+		s.handleGet(w, r)
+	case "POST":
+		s.handlePost(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+
+}
+
+func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.SpoofPayload {
 		leaf := r.PathValue("path")
 		ext := filepath.Ext(leaf) // extracts extension from the leaf path
@@ -105,8 +124,50 @@ func (s *Server) handleAll(w http.ResponseWriter, r *http.Request) {
 
 	// default serve a 200
 	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
+
 	w.Write([]byte("<!DOCTYPE html><html><head><title>simulacrum</title></head><body><center><h1>OK</h1></center></body></html>"))
+}
+
+func (s Server) handlePost(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("[http] POST received")
+
+	var capture []byte
+	var truncated bool
+	var maxBodyBytes = s.cfg.MaxBodyBytes * 1024
+
+	limitReader := io.LimitReader(r.Body, maxBodyBytes)
+	data, _ := io.ReadAll(limitReader)
+
+	if int64(len(data)) > maxBodyBytes {
+		truncated = true
+		data = data[:maxBodyBytes]
+	}
+
+	capture = []byte(base64.StdEncoding.EncodeToString(data))
+	captureHead := string(capture[:8])
+	preview := ""
+	if len(capture) > 0 {
+		preview = captureHead
+	}
+
+	logger.Info("[http] POST data captured",
+		"client", r.RemoteAddr,
+		"host", r.Host,
+		"path", r.URL.Path,
+		"truncated", truncated,
+		"bytes", len(capture),
+		"preview", preview,
+	)
+
+	if len(capture) > 0 {
+		err := s.capturePostBody(captureHead, capture)
+		if err != nil {
+			logger.Error("[http] failed to write capture to file", "error", err)
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func (s *Server) serveFile(w http.ResponseWriter, fileName string, fileType string, contentType string) {
@@ -170,4 +231,27 @@ func (s *Server) logRequest(r *http.Request) {
 			)
 		}
 	}
+}
+
+func (s *Server) capturePostBody(file string, data []byte) error {
+	var err error
+	path := "./captures/"
+	file = filepath.Join(path, file+".b64")
+
+	fmt.Println("[http] writing capture to file", file)
+
+	if err = os.MkdirAll(path, 0755); err != nil {
+		return fmt.Errorf("failed to create captures directory: %w", err)
+	}
+
+	if _, err = os.Stat(file); os.IsNotExist(err) {
+		f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Errorf("failed to create capture file: %w", err)
+		}
+		defer f.Close()
+
+		os.WriteFile(file, data, 0644)
+	}
+	return nil
 }

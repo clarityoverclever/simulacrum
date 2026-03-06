@@ -43,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("starting Simulacrum version: 0.0.1")
+	fmt.Println("starting Simulacrum version: 0.1.0")
 
 	// capture and process terminating signals
 	quit := make(chan os.Signal, 1)
@@ -87,6 +87,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			BindAddress:  cfg.HTTP.BindAddress,
 			LogHeaders:   cfg.HTTP.LogHeaders,
 			SpoofPayload: cfg.HTTP.SpoofPayload,
+			MaxBodyBytes: cfg.HTTP.MaxBodyBytes,
 		}),
 
 		ntp.Init(ntp.Config{
