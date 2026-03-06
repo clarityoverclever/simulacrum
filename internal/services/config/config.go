@@ -42,7 +42,7 @@ type HttpConfig struct {
 type NtpConfig struct {
 	Enabled     bool    `yaml:"enabled"`
 	BindAddress string  `yaml:"bind_addr"`
-	Offset      float64 `yaml:"offset"`
+	Multiplier  float64 `yaml:"multiplier"`
 }
 
 type Config struct {

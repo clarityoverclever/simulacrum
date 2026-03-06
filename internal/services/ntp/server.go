@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"simulacrum/internal/services/logger"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -38,7 +39,7 @@ type Server struct {
 type Config struct {
 	Enabled     bool
 	BindAddress string
-	Offset      float64
+	Multiplier  float64
 }
 
 func New(cfg Config) *Server {
@@ -47,7 +48,7 @@ func New(cfg Config) *Server {
 		cfg:          cfg,
 		baseTime:     time.Now().Unix(),
 		baseRealTime: time.Now().Unix(),
-		multiplier:   cfg.Offset,
+		multiplier:   cfg.Multiplier,
 		ctx:          ctx,
 		cancel:       cancel,
 	}
@@ -86,7 +87,6 @@ func (s *Server) Stop() error {
 		}
 	}
 
-	// Wait for the goroutine to finish
 	s.wg.Wait()
 
 	return nil
@@ -159,7 +159,6 @@ func (s *Server) serve() {
 			response[9] = 0x00
 			response[10] = 0x00
 			response[11] = 0x0f
-			//copy(response[12:22], "ntp.sim.org")
 
 			// reference Timestamp (bytes 16-23)
 			response[16] = byte(seconds >> 24)
@@ -200,9 +199,7 @@ func (s *Server) serve() {
 				continue
 			}
 
-			logger.Info("[ntp] packet processed", "read", string(buf), "wrote", string(response))
-			fmt.Printf("[ntp] packet sent to %s\n", remoteAddr.String())
-			fmt.Printf("[ntp] multiplier: %f\n", s.multiplier)
+			logger.Info("[ntp] packet processed", "real", strconv.FormatInt(realElapsed, 10), "adjusted", strconv.FormatInt(adjustedElapsed, 10))
 		}
 	}
 }

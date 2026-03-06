@@ -92,7 +92,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		ntp.Init(ntp.Config{
 			Enabled:     cfg.NTP.Enabled,
 			BindAddress: cfg.NTP.BindAddress,
-			Offset:      cfg.NTP.Offset,
+			Multiplier:  cfg.NTP.Multiplier,
 		}),
 	}
 
