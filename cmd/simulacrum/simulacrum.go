@@ -26,6 +26,7 @@ import (
 	"simulacrum/internal/services/http"
 	"simulacrum/internal/services/logger"
 	"simulacrum/internal/services/ntp"
+	"simulacrum/internal/services/web"
 	"syscall"
 )
 
@@ -83,11 +84,14 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		}),
 
 		http.Init(http.Config{
-			Enabled:      cfg.HTTP.Enabled,
-			BindAddress:  cfg.HTTP.BindAddress,
-			LogHeaders:   cfg.HTTP.LogHeaders,
-			SpoofPayload: cfg.HTTP.SpoofPayload,
-			MaxBodyBytes: cfg.HTTP.MaxBodyBytes,
+			Enabled:     cfg.HTTP.Enabled,
+			BindAddress: cfg.HTTP.BindAddress,
+			Handler: web.HandlerConfig{
+				ServiceName:  "http",
+				LogHeaders:   cfg.HTTP.LogHeaders,
+				SpoofPayload: cfg.HTTP.SpoofPayload,
+				MaxBodyBytes: cfg.HTTP.MaxBodyBytes,
+			},
 		}),
 
 		ntp.Init(ntp.Config{
