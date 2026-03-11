@@ -3,6 +3,7 @@ module simulacrum
 go 1.25
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/google/uuid v1.6.0
 	github.com/miekg/dns v1.1.72
 	github.com/natefinch/lumberjack v2.0.0+incompatible

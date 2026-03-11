@@ -37,7 +37,7 @@ type HttpConfig struct {
 	BindAddress  string `yaml:"bind_addr"`
 	LogHeaders   bool   `yaml:"log_headers"`
 	SpoofPayload bool   `yaml:"spoof_payload"`
-	MaxBodyBytes int64  `yaml:"max_body_bytes"`
+	MaxBodyKb    int64  `yaml:"max_body_kb"`
 }
 
 type NtpConfig struct {

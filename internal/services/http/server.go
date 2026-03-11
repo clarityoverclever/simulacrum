@@ -57,7 +57,7 @@ func (s *Server) Start() error {
 		WriteTimeout: 10 * time.Second,
 	}
 
-	fmt.Println("[http] listening on", s.cfg.BindAddress)
+	fmt.Printf("[%s] listening on %s\n", s.cfg.Handler.ServiceName, s.cfg.BindAddress)
 	if err := s.Server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
@@ -67,7 +67,7 @@ func (s *Server) Start() error {
 
 func (s *Server) Stop() error {
 	if s.Server != nil {
-		fmt.Println("[http] Stopping server")
+		fmt.Printf("[%s] Stopping server\n", s.cfg.Handler.ServiceName)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

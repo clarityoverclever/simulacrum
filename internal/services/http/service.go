@@ -31,7 +31,7 @@ type Service struct {
 }
 
 func Init(cfg Config) *Service {
-	fmt.Println("[http] initializing service")
+	fmt.Printf("[%s] initializing service\n", cfg.Handler.ServiceName)
 	return &Service{
 		state:  core.StatusStopped,
 		config: cfg,
@@ -39,13 +39,13 @@ func Init(cfg Config) *Service {
 }
 
 func (s *Service) Name() string {
-	return "http"
+	return s.config.Handler.ServiceName
 }
 
 func (s *Service) Run(l net.Listener) error {
 	if s.config.Enabled {
 		if err := s.start(); err != nil {
-			fmt.Printf("[http] failed to start server: %v\n", err)
+			fmt.Printf("[%s] failed to start server: %v\n", s.config.Handler.ServiceName, err)
 		}
 	}
 
@@ -68,7 +68,7 @@ func (s *Service) handleConnection(conn net.Conn) {
 	var msg core.ControlMessage
 	if err := dec.Decode(&msg); err != nil {
 		if err != io.EOF {
-			fmt.Printf("[http] control message decode error: %v\n", err)
+			fmt.Printf("[%s] control message decode error: %v\n", s.config.Handler.ServiceName, err)
 		}
 		return
 	}
@@ -78,28 +78,28 @@ func (s *Service) handleConnection(conn net.Conn) {
 	switch msg.Action {
 	case core.ActionStart:
 		if err := s.start(); err != nil {
-			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[http] %v", err.Error())}
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[%s] %v", s.config.Handler.ServiceName, err.Error())}
 		} else {
-			resp = core.ControlResponse{Status: "ok", Message: "[http] server started"}
+			resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[%s] server started\n", s.config.Handler.ServiceName)}
 		}
 	case core.ActionStop:
 		if err := s.stop(); err != nil {
-			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[http] %v", err.Error())}
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[%s] %v", s.config.Handler.ServiceName, err.Error())}
 		} else {
-			resp = core.ControlResponse{Status: "ok", Message: "[http] server stopped"}
+			resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[%s] server stopped\n", s.config.Handler.ServiceName)}
 		}
 	case core.ActionStatus:
-		resp = core.ControlResponse{Status: "ok", Message: string("[http] server " + s.getState())}
+		resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[%s] server "+string(s.getState()), s.config.Handler.ServiceName)}
 	case core.ActionRestart:
 		if err := s.restart(); err != nil {
-			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[http] %v", err.Error())}
+			resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[%s] %v", s.config.Handler.ServiceName, err.Error())}
 		} else {
-			resp = core.ControlResponse{Status: "ok", Message: "[http] server restarted"}
+			resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[%s] server restarted\n", s.config.Handler.ServiceName)}
 		}
 	case core.ActionUpdate:
-		resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[http] no update action for static service")}
+		resp = core.ControlResponse{Status: "ok", Message: fmt.Sprintf("[%s] no update action for static service\n", s.config.Handler.ServiceName)}
 	default:
-		resp = core.ControlResponse{Status: "error", Message: "[http] unknown action"}
+		resp = core.ControlResponse{Status: "error", Message: fmt.Sprintf("[%s] unknown action\n", s.config.Handler.ServiceName)}
 	}
 
 	_ = enc.Encode(resp)
@@ -110,25 +110,25 @@ func (s *Service) start() error {
 	defer s.mu.Unlock()
 
 	if s.state == core.StatusRunning {
-		return fmt.Errorf("server already running")
+		return fmt.Errorf("[%s] server already running\n", s.config.Handler.ServiceName)
 	}
 
 	var err error
 	s.server, err = New(s.config)
 	if err != nil {
 		s.state = core.StatusError
-		return fmt.Errorf("[http] failed to create server: %w", err)
+		return fmt.Errorf("[%s] failed to create server: %w", s.config.Handler.ServiceName, err)
 	}
 
 	go func() {
 		if err := s.server.Start(); err != nil {
 			s.setState(core.StatusError)
-			fmt.Printf("[http] server error: %v\n", err)
+			fmt.Printf("[%s] server error: %v\n", s.config.Handler.ServiceName, err)
 		}
 	}()
 
 	s.state = core.StatusRunning
-	fmt.Println("[http] server started")
+	fmt.Printf("[%s] server started\n", s.config.Handler.ServiceName)
 	return nil
 }
 
@@ -137,18 +137,18 @@ func (s *Service) stop() error {
 	defer s.mu.Unlock()
 
 	if s.state != core.StatusRunning {
-		return fmt.Errorf("[http] server not running")
+		return fmt.Errorf("[%s] server not running", s.config.Handler.ServiceName)
 	}
 
 	if s.server != nil {
 		if err := s.server.Stop(); err != nil {
 			s.state = core.StatusError
-			return fmt.Errorf("[http] failed to stop server: %w", err)
+			return fmt.Errorf("[%s] failed to stop server: %w", s.config.Handler.ServiceName, err)
 		}
 	}
 
 	s.state = core.StatusStopped
-	fmt.Println("[http] server stopped")
+	fmt.Printf("[%s] server stopped\n", s.config.Handler.ServiceName)
 	return nil
 }
 

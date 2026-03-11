@@ -90,7 +90,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 				ServiceName:  "http",
 				LogHeaders:   cfg.HTTP.LogHeaders,
 				SpoofPayload: cfg.HTTP.SpoofPayload,
-				MaxBodyBytes: cfg.HTTP.MaxBodyBytes,
+				MaxBodyKb:    cfg.HTTP.MaxBodyKb,
 			},
 		}),
 

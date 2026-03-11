@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"simulacrum/internal/services/hash"
 	"simulacrum/internal/services/logger"
 	"time"
 )
@@ -34,7 +35,7 @@ type HandlerConfig struct {
 	ServiceName  string
 	SpoofPayload bool
 	LogHeaders   bool
-	MaxBodyBytes int64
+	MaxBodyKb    int64
 }
 
 type Handler struct {
@@ -88,9 +89,9 @@ func (h *Handler) HandlePost(w http.ResponseWriter, r *http.Request) {
 
 	var capture []byte
 	var truncated bool
-	var maxBodyBytes = h.cfg.MaxBodyBytes * 1024
+	var maxBodyBytes = h.cfg.MaxBodyKb * 1024 // convert to bytes for io.LimitReader
 
-	limitReader := io.LimitReader(r.Body, maxBodyBytes)
+	limitReader := io.LimitReader(r.Body, maxBodyBytes+1)
 	data, _ := io.ReadAll(limitReader)
 
 	if int64(len(data)) > maxBodyBytes {
@@ -99,10 +100,9 @@ func (h *Handler) HandlePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	capture = []byte(base64.StdEncoding.EncodeToString(data))
-	preview := ""
-	if len(capture) > 0 {
-		end := min(8, len(capture))
-		preview = string(capture[:end])
+	preview, err := hash.GetXxHash(capture)
+	if err != nil {
+		logger.Error(fmt.Sprintf("[%s] failed to generate preview hash", h.cfg.ServiceName), "error", err)
 	}
 
 	logger.Info(fmt.Sprintf("[%s] POST data captured", h.cfg.ServiceName),
@@ -115,7 +115,7 @@ func (h *Handler) HandlePost(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if len(capture) > 0 {
-		err := h.CapturePostBody(preview, capture)
+		err = h.CapturePostBody(preview, capture)
 		if err != nil {
 			logger.Error(fmt.Sprintf("[%s] failed to write capture to file", h.cfg.ServiceName), "error", err)
 		}
