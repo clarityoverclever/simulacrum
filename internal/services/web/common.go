@@ -199,14 +199,17 @@ func (h *Handler) CapturePostBody(file string, data []byte) error {
 		return fmt.Errorf("failed to create captures directory: %w", err)
 	}
 
-	if _, err = os.Stat(file); os.IsNotExist(err) {
-		f, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			fmt.Errorf("failed to create capture file: %w", err)
-		}
-		defer f.Close()
-
-		os.WriteFile(file, data, 0644)
+	if _, err = os.Stat(file); err == nil {
+		fmt.Printf("[%s] capture already exists, skipping\n", h.cfg.ServiceName)
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat capture file: %w", err)
 	}
+
+	err = os.WriteFile(file, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write capture to file: %w", err)
+	}
+
 	return nil
 }
