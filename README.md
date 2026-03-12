@@ -87,7 +87,7 @@ file: ./config/config.yaml
 - **bind_addr:** `IP:PORT`  
   Address and port simulacrum binds to for serving HTTP traffic.
 
-- **max_body_size:** `int`  
+- **max_body_kbe:** `int`  
   Maximum capture size of HTTP POST request bodies in kilobytes.
 
 - **log_headers:** `true | false`  
@@ -121,10 +121,11 @@ http:
   bind_addr: 0.0.0.0:80
   log_headers: false
   spoof_payload: false
-  max_body_size: 64
+  max_body_kb: 64
 ntp:
   enabled: true
   bind_addr: 0.0.0.0:123
+  multiplier: 1.0
 ```
 
 ### Usage
