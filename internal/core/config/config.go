@@ -33,11 +33,20 @@ type DnsConfig struct {
 }
 
 type HttpConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	BindAddress  string `yaml:"bind_addr"`
-	LogHeaders   bool   `yaml:"log_headers"`
-	SpoofPayload bool   `yaml:"spoof_payload"`
-	MaxBodyKb    int64  `yaml:"max_body_kb"`
+	Enabled     bool   `yaml:"enabled"`
+	BindAddress string `yaml:"bind_addr"`
+}
+
+type HttpsConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	BindAddress string `yaml:"bind_addr"`
+	CertMode    string `yaml:"cert_mode"`
+}
+
+type CommonWebConfig struct {
+	SpoofPayload bool  `yaml:"spoof_payload"`
+	LogHeaders   bool  `yaml:"log_headers"`
+	MaxBodyKb    int64 `yaml:"max_body_kb"`
 }
 
 type NtpConfig struct {
@@ -46,10 +55,19 @@ type NtpConfig struct {
 	Multiplier  float64 `yaml:"multiplier"`
 }
 
+type TlsCertConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Mode    string `yaml:"mode"`
+	Cache   string `yaml:"cache"`
+}
+
 type Config struct {
-	DNS  DnsConfig  `yaml:"dns"`
-	HTTP HttpConfig `yaml:"http"`
-	NTP  NtpConfig  `yaml:"ntp"`
+	DNS       DnsConfig       `yaml:"dns"`
+	HTTP      HttpConfig      `yaml:"http"`
+	HTTPS     HttpsConfig     `yaml:"https"`
+	CommonWeb CommonWebConfig `yaml:"common_web"`
+	NTP       NtpConfig       `yaml:"ntp"`
+	TLSCerts  TlsCertConfig   `yaml:"tls_cert"`
 }
 
 func Load(path string) (*Config, error) {

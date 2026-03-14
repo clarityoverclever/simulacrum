@@ -23,8 +23,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"simulacrum/internal/services/hash"
-	"simulacrum/internal/services/logger"
+	"simulacrum/internal/core/hash"
+	"simulacrum/internal/core/logger"
 	"time"
 )
 
@@ -160,7 +160,7 @@ func (h *Handler) ServeFile(w http.ResponseWriter, fileName string, fileType str
 		w.Header().Set("Content-Disposition", `attachment; filename="`+fileName+`"`)
 		w.Header().Set("Content-Type", contentType)
 
-		// serve powershell payload
+		// serve PowerShell payload
 		agent, err := staticDir.ReadFile("static/agent.ps1")
 		if err != nil {
 			logger.Error(fmt.Sprintf("[%s] failed to read agent.ps1", h.cfg.ServiceName), "error", err)
@@ -225,11 +225,11 @@ func (h *Handler) CapturePostBody(file string, data []byte) error {
 		return nil
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("[%s] failed to stat capture file: %w", h.cfg.ServiceName, err)
-	} else {
-		err = os.WriteFile(file, data, 0644)
-		if err != nil {
-			return fmt.Errorf("[%s] failed to write capture to file: %w", h.cfg.ServiceName, err)
-		}
+	}
+
+	err = os.WriteFile(file, data, 0644)
+	if err != nil {
+		return fmt.Errorf("[%s] failed to write capture to file: %w", h.cfg.ServiceName, err)
 	}
 	return nil
 }

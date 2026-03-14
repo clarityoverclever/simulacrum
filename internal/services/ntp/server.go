@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"simulacrum/internal/services/logger"
+	"simulacrum/internal/core/logger"
 	"strconv"
 	"sync"
 	"time"

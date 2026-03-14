@@ -21,10 +21,11 @@ import (
 	"os"
 	"os/signal"
 	"simulacrum/internal/core"
-	"simulacrum/internal/services/config"
+	"simulacrum/internal/core/config"
+	"simulacrum/internal/core/logger"
 	"simulacrum/internal/services/dns"
 	"simulacrum/internal/services/http"
-	"simulacrum/internal/services/logger"
+	"simulacrum/internal/services/https"
 	"simulacrum/internal/services/ntp"
 	"simulacrum/internal/services/web"
 	"syscall"
@@ -88,9 +89,21 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			BindAddress: cfg.HTTP.BindAddress,
 			Handler: web.HandlerConfig{
 				ServiceName:  "http",
-				LogHeaders:   cfg.HTTP.LogHeaders,
-				SpoofPayload: cfg.HTTP.SpoofPayload,
-				MaxBodyKb:    cfg.HTTP.MaxBodyKb,
+				LogHeaders:   cfg.CommonWeb.LogHeaders,
+				SpoofPayload: cfg.CommonWeb.SpoofPayload,
+				MaxBodyKb:    cfg.CommonWeb.MaxBodyKb,
+			},
+		}),
+
+		https.Init(https.Config{
+			Enabled:     cfg.HTTPS.Enabled,
+			BindAddress: cfg.HTTPS.BindAddress,
+			CertMode:    cfg.HTTPS.CertMode,
+			Handler: web.HandlerConfig{
+				ServiceName:  "https",
+				LogHeaders:   cfg.CommonWeb.LogHeaders,
+				SpoofPayload: cfg.CommonWeb.SpoofPayload,
+				MaxBodyKb:    cfg.CommonWeb.MaxBodyKb,
 			},
 		}),
 

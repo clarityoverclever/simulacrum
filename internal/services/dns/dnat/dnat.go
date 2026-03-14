@@ -17,7 +17,7 @@ package dnat
 import (
 	"fmt"
 	"os/exec"
-	"simulacrum/internal/services/logger"
+	"simulacrum/internal/core/logger"
 )
 
 type Manager struct {
