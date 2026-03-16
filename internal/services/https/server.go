@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"simulacrum/internal/core/logger"
 	"simulacrum/internal/core/tlscert"
 	"time"
 
@@ -69,6 +70,12 @@ func (s *Server) Start() error {
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				if hello.ServerName == "" {
+					logger.Info(fmt.Sprintf("[%s] tls handshake without SNI", s.cfg.Handler.ServiceName))
+
+				} else {
+					logger.Info(fmt.Sprintf("[%s] client certificate requested", s.cfg.Handler.ServiceName), "server_name", hello.ServerName)
+				}
 				return s.certProvider.GetCertificate(hello.ServerName)
 			},
 		},
