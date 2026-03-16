@@ -74,7 +74,7 @@ func (s *Server) Start() error {
 					logger.Info(fmt.Sprintf("[%s] tls handshake without SNI", s.cfg.Handler.ServiceName))
 
 				} else {
-					logger.Info(fmt.Sprintf("[%s] client certificate requested", s.cfg.Handler.ServiceName), "server_name", hello.ServerName)
+					logger.Info(fmt.Sprintf("[%s] tls handshake with SNI", s.cfg.Handler.ServiceName), "server_name", hello.ServerName)
 				}
 				return s.certProvider.GetCertificate(hello.ServerName)
 			},

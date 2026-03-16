@@ -74,8 +74,8 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	defer sockMan.Close("/tmp/simulacrum")
 	fmt.Println("[ipc] service started")
 
-	fmt.Println("[tls] initializing TLS provider")
-	tlsProvider, err := tlscert.NewProvider(tlscert.TLSConfig{
+	fmt.Println("[tls] initializing service")
+	tlsManager, err := tlscert.NewManager(tlscert.TLSConfig{
 		Mode: cfg.TLS.Mode,
 		Cert: cfg.TLS.Cert,
 		Key:  cfg.TLS.Key,
@@ -116,7 +116,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 				SpoofPayload: cfg.CommonWeb.SpoofPayload,
 				MaxBodyKb:    cfg.CommonWeb.MaxBodyKb,
 			},
-			CertProvider: tlsProvider,
+			CertProvider: tlsManager.Provider(),
 		}),
 
 		ntp.Init(ntp.Config{
