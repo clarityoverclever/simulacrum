@@ -33,30 +33,20 @@ type Server struct {
 }
 
 type Config struct {
-	Enabled     bool
-	BindAddress string
-	Handler     web.HandlerConfig
-	Tls         tlscert.TLSConfig
+	Enabled      bool
+	BindAddress  string
+	Handler      web.HandlerConfig
+	CertProvider tlscert.CertificateProvider
 }
 
 func New(cfg Config) (*Server, error) {
-	var certProvider tlscert.CertificateProvider
-
-	switch cfg.Tls.Mode {
-	case "static":
-		cert, err := tls.LoadX509KeyPair(cfg.Tls.Cert, cfg.Tls.Key)
-		if err != nil {
-			return nil, fmt.Errorf("[%s] failed to load TLS certificate: %w", cfg.Handler.ServiceName, err)
-		}
-
-		certProvider = &tlscert.StaticProvider{Certificate: &cert}
-	default:
-		return nil, fmt.Errorf("[%s] unsupported TLS mode: %s", cfg.Handler.ServiceName, cfg.Tls.Mode)
+	if cfg.CertProvider == nil {
+		return nil, fmt.Errorf("[%s] cert provider is not supported for HTTPS", cfg.Handler.ServiceName)
 	}
 
 	return &Server{
 		cfg:          cfg,
-		certProvider: certProvider,
+		certProvider: cfg.CertProvider,
 	}, nil
 }
 

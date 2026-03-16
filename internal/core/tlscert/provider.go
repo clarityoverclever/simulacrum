@@ -33,7 +33,7 @@ type StaticProvider struct {
 
 func (p *StaticProvider) GetCertificate(serverName string) (*tls.Certificate, error) {
 	if p == nil || p.Certificate == nil {
-		return nil, fmt.Errorf("no certificate provided")
+		return nil, fmt.Errorf("[tls] no certificate provided")
 	}
 
 	return p.Certificate, nil

@@ -14,8 +14,30 @@
 
 package tlscert
 
+import (
+	"crypto/tls"
+	"fmt"
+)
+
 type TLSConfig struct {
 	Mode string
 	Cert string
 	Key  string
+}
+
+func NewProvider(cfg TLSConfig) (CertificateProvider, error) {
+	switch cfg.Mode {
+	case "static":
+		if cfg.Cert == "" || cfg.Key == "" {
+			return nil, fmt.Errorf("[tls] static mode requires both cert and key")
+		}
+
+		cert, err := tls.LoadX509KeyPair(cfg.Cert, cfg.Key)
+		if err != nil {
+			return nil, fmt.Errorf("[tls] failed to load certificate: %v", err)
+		}
+		return &StaticProvider{Certificate: &cert}, nil
+	default:
+		return nil, fmt.Errorf("[tls] unsupported mode: %s", cfg.Mode)
+	}
 }

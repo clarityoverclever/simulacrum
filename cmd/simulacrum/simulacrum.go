@@ -74,6 +74,17 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	defer sockMan.Close("/tmp/simulacrum")
 	fmt.Println("[ipc] service started")
 
+	fmt.Println("[tls] initializing TLS provider")
+	tlsProvider, err := tlscert.NewProvider(tlscert.TLSConfig{
+		Mode: cfg.TLS.Mode,
+		Cert: cfg.TLS.Cert,
+		Key:  cfg.TLS.Key,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize TLS provider: %w", err)
+	}
+	fmt.Println("[tls] TLS provider initialized")
+
 	services := []core.Service{
 		dns.Init(dns.Config{
 			Enabled:       cfg.DNS.Enabled,
@@ -105,11 +116,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 				SpoofPayload: cfg.CommonWeb.SpoofPayload,
 				MaxBodyKb:    cfg.CommonWeb.MaxBodyKb,
 			},
-			Tls: tlscert.TLSConfig{
-				Mode: cfg.TLS.Mode,
-				Cert: cfg.TLS.Cert,
-				Key:  cfg.TLS.Key,
-			},
+			CertProvider: tlsProvider,
 		}),
 
 		ntp.Init(ntp.Config{
