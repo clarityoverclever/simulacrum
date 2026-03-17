@@ -10,12 +10,16 @@ Simulacrum aims to provide deterministic network behavior for analysis and testi
 ## Disclaimer
 ### This project is under active development, and the documentation is incomplete. Feedback is welcome and appreciated.
 
+### Objectives
+For years InetSim has been the backbone of network simulations, but as malware has evolved, the tool is starting to show its age.
+Simulacrum aims to bridge the gap by providing a modern network simulator designed specifically for the modern threat landscape.
+
 ## Features
 - supplies configurable servers on a data plane (DNS, HTTP(S), NTP)
-- exposes servers to a control plane for dynamic configuration
-- supports tls with static or dynamic certificate management
+- smart DNS that uses upstream checks to keep the malware's view of the world realistic
+- dynamic TLS minting with a pre-installed trusted root to prevent broken handshakes and capture encrypted traffic
+- time manipulation via an NTP multiplier
 - structured logging for analysis
-- real-time reporting of server behavior
 - handcrafted, artisanal, go. No vibes, just code.
 
 ### DNS
