@@ -65,7 +65,7 @@ type CAConfig struct {
 	KeyFile          string `yaml:"key_file"`
 	CommonName       string `yaml:"common_name"`
 	Organization     string `yaml:"organization"`
-	RootValidityDays int    `yaml:"validity_days"`
+	RootValidityDays int    `yaml:"root_validity_days"`
 	LeafValidityDays int    `yaml:"leaf_validity_days"`
 }
 

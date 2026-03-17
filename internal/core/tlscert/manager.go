@@ -17,6 +17,7 @@ package tlscert
 import (
 	"crypto/tls"
 	"fmt"
+	"simulacrum/internal/services/ca"
 )
 
 type Manager struct {
@@ -24,13 +25,13 @@ type Manager struct {
 	provider CertificateProvider
 }
 
-func NewManager(cfg TLSConfig) (*Manager, error) {
-	provider, err := newProvider(cfg)
+func NewManager(tlsCfg TLSConfig, caCfg ca.Config) (*Manager, error) {
+	provider, err := newProvider(tlsCfg, caCfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Manager{cfg: cfg, provider: provider}, nil
+	return &Manager{cfg: tlsCfg, provider: provider}, nil
 }
 
 func (m *Manager) Provider() CertificateProvider {
@@ -41,20 +42,27 @@ func (m *Manager) Mode() string {
 	return m.cfg.Mode
 }
 
-func newProvider(cfg TLSConfig) (CertificateProvider, error) {
-	err := cfg.Validate()
+func newProvider(tlsCfg TLSConfig, caCfg ca.Config) (CertificateProvider, error) {
+	err := tlsCfg.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("[tls] invalid configuration: %w", err)
 	}
 
-	switch cfg.Mode {
+	switch tlsCfg.Mode {
 	case "static":
-		cert, err := tls.LoadX509KeyPair(cfg.Cert, cfg.Key)
+		cert, err := tls.LoadX509KeyPair(tlsCfg.Cert, tlsCfg.Key)
 		if err != nil {
 			return nil, fmt.Errorf("[tls] failed to load certificate: %w", err)
 		}
 		return &StaticProvider{Certificate: &cert}, nil
+	case "dynamic":
+		caManager, err := ca.NewManager(caCfg)
+		if err != nil {
+			return nil, fmt.Errorf("[tls] failed to initialize CA issuer: %w", err)
+		}
+
+		return NewCachingProvider(caManager), nil
 	default:
-		return nil, fmt.Errorf("[tls] unsupported mode: %s", cfg.Mode)
+		return nil, fmt.Errorf("[tls] unsupported mode: %s", tlsCfg.Mode)
 	}
 }

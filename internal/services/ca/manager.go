@@ -141,7 +141,12 @@ func (m *Manager) loadRoot() error {
 		return fmt.Errorf("root certificate chain is empty: %w", err)
 	}
 
-	rootCert, err := x509.ParseCertificate(certPEM)
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return fmt.Errorf("failed to decode root certificate PEM: %w", err)
+	}
+
+	rootCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return fmt.Errorf("failed to parse root certificate: %w", err)
 	}
@@ -151,7 +156,7 @@ func (m *Manager) loadRoot() error {
 	return nil
 }
 
-func (m *Manager) IssueCertificate(serverName string) (*tls.Certificate, error) {
+func (m *Manager) IssueServerCertificate(serverName string) (*tls.Certificate, error) {
 	if m.rootCert == nil || m.rootKey == nil {
 		return nil, fmt.Errorf("root certificate or key not loaded")
 	}
@@ -202,7 +207,7 @@ func (m *Manager) IssueCertificate(serverName string) (*tls.Certificate, error) 
 	var certPEM []byte
 
 	if rootPEM != nil {
-		certPEM = append(rootPEM, leafPEM...)
+		certPEM = append(leafPEM, rootPEM...)
 	} else {
 		certPEM = leafPEM
 	}

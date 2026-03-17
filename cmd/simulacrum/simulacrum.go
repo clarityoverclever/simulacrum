@@ -24,12 +24,14 @@ import (
 	"simulacrum/internal/core/config"
 	"simulacrum/internal/core/logger"
 	"simulacrum/internal/core/tlscert"
+	"simulacrum/internal/services/ca"
 	"simulacrum/internal/services/dns"
 	"simulacrum/internal/services/http"
 	"simulacrum/internal/services/https"
 	"simulacrum/internal/services/ntp"
 	"simulacrum/internal/services/web"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -79,7 +81,15 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		Mode: cfg.TLS.Mode,
 		Cert: cfg.TLS.Cert,
 		Key:  cfg.TLS.Key,
+	}, ca.Config{
+		CertFile:         cfg.CA.CertFile,
+		KeyFile:          cfg.CA.KeyFile,
+		CommonName:       cfg.CA.CommonName,
+		Organization:     cfg.CA.Organization,
+		RootValidityDays: time.Duration(cfg.CA.RootValidityDays),
+		LeafValidityDays: time.Duration(cfg.CA.LeafValidityDays),
 	})
+
 	if err != nil {
 		return fmt.Errorf("failed to initialize TLS provider: %w", err)
 	}
