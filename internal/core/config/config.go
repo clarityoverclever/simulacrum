@@ -32,6 +32,12 @@ type DnsConfig struct {
 	DefaultSubnet string `yaml:"default_subnet"`
 }
 
+type NtpConfig struct {
+	Enabled     bool    `yaml:"enabled"`
+	BindAddress string  `yaml:"bind_addr"`
+	Multiplier  float64 `yaml:"multiplier"`
+}
+
 type HttpConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	BindAddress string `yaml:"bind_addr"`
@@ -48,25 +54,29 @@ type CommonWebConfig struct {
 	MaxBodyKb    int64 `yaml:"max_body_kb"`
 }
 
-type NtpConfig struct {
-	Enabled     bool    `yaml:"enabled"`
-	BindAddress string  `yaml:"bind_addr"`
-	Multiplier  float64 `yaml:"multiplier"`
-}
-
 type TlsConfig struct {
 	Mode string `yaml:"cert_mode"`
 	Cert string `yaml:"cert_file"`
 	Key  string `yaml:"key_file"`
 }
 
+type CAConfig struct {
+	CertFile         string `yaml:"cert_file"`
+	KeyFile          string `yaml:"key_file"`
+	CommonName       string `yaml:"common_name"`
+	Organization     string `yaml:"organization"`
+	RootValidityDays int    `yaml:"validity_days"`
+	LeafValidityDays int    `yaml:"leaf_validity_days"`
+}
+
 type Config struct {
 	DNS       DnsConfig       `yaml:"dns"`
+	NTP       NtpConfig       `yaml:"ntp"`
 	HTTP      HttpConfig      `yaml:"http"`
 	HTTPS     HttpsConfig     `yaml:"https"`
 	CommonWeb CommonWebConfig `yaml:"common_web"`
-	NTP       NtpConfig       `yaml:"ntp"`
 	TLS       TlsConfig       `yaml:"tls"`
+	CA        CAConfig        `yaml:"ca"`
 }
 
 func Load(path string) (*Config, error) {

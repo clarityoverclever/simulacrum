@@ -33,7 +33,7 @@ func (c *TLSConfig) Validate() error {
 			return fmt.Errorf("static mode requires both cert and key")
 		}
 	case "dynamic":
-		return fmt.Errorf("dynamic mode is not implemented")
+		return nil
 	default:
 		return fmt.Errorf("unsupported mode: %s", c.Mode)
 	}
