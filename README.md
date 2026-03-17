@@ -8,7 +8,7 @@ Simulacrum aims to provide deterministic network behavior for analysis and testi
 ---
 
 ## Disclaimer
-### This project is under active development. Feedback is welcome and appreciated.
+### This project is under active development, and the documentation is incomplete. Feedback is welcome and appreciated.
 
 ## Features
 - supplies configurable servers on a data plane (DNS, HTTP(S), NTP)
