@@ -27,6 +27,7 @@ Simulacrum aims to bridge the gap by providing a modern network simulator design
 - Rewrites queries to a static IP or upstream DNS server with local DNAT/
 - Optional "liveness" checks against upstream DNS server
 - DNS spoofing using a configurable CIDR subnet
+- DNS tunneling detection with configurable threshold
 
 ### HTTP(S)
 - Serves HTTP with file service on configurable port
@@ -93,6 +94,12 @@ file: ./config/config.yaml
 
 - **default_subnet:** `CIDR`  
   Subnet used to generate spoofed IPs.
+
+- **enable_tunnel_detection:** `true | false`  
+  Enables detection of tunneling traffic.
+
+- **tunnel_detection_threshold:** `float`  
+  Threshold for tunneling detection. 4.0 is recommended
 
 ### ntp
 - **enabled:** `true | false`  
@@ -167,6 +174,8 @@ dns:
   upstream_dns: 9.9.9.9:53
   spoof_network: true
   default_subnet: 10.0.1.0/8
+  enable_tunnel_detection: true
+  tunnel_detection_threshold: 4.0
 ntp:
   enabled: true
   bind_addr: 0.0.0.0:123

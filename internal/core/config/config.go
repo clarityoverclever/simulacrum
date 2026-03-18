@@ -23,13 +23,15 @@ import (
 )
 
 type DnsConfig struct {
-	Enabled       bool   `yaml:"enabled"`
-	BindAddress   string `yaml:"bind_addr"`
-	AnalysisIP    string `yaml:"analysis_ip"`
-	CheckLiveness bool   `yaml:"check_liveness"`
-	UpstreamDNS   string `yaml:"upstream_dns"`
-	SpoofNetwork  bool   `yaml:"spoof_network"`
-	DefaultSubnet string `yaml:"default_subnet"`
+	Enabled                  bool    `yaml:"enabled"`
+	BindAddress              string  `yaml:"bind_addr"`
+	AnalysisIP               string  `yaml:"analysis_ip"`
+	CheckLiveness            bool    `yaml:"check_liveness"`
+	UpstreamDNS              string  `yaml:"upstream_dns"`
+	SpoofNetwork             bool    `yaml:"spoof_network"`
+	DefaultSubnet            string  `yaml:"default_subnet"`
+	TunnelDetection          bool    `yaml:"enable_tunnel_detection"`
+	TunnelDetectionThreshold float64 `yaml:"tunnel_detection_threshold"`
 }
 
 type NtpConfig struct {

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"simulacrum/internal/core/inspect"
 	"simulacrum/internal/core/logger"
 	"simulacrum/internal/services/dns/dnat"
 	"simulacrum/internal/services/dns/ippool"
@@ -29,26 +30,30 @@ import (
 )
 
 type Server struct {
-	bindAddress   string
-	analysisIP    net.IP
-	dnsServer     *dns.Server
-	checkLiveness bool
-	upstreamDNS   string
-	SpoofNetwork  bool
-	ipPool        *ippool.Pool
-	dnatManager   *dnat.Manager
-	dnatMap       map[string]string // domain -> spoofed IP
-	dnatLock      sync.RWMutex
+	bindAddress              string
+	analysisIP               net.IP
+	dnsServer                *dns.Server
+	checkLiveness            bool
+	upstreamDNS              string
+	SpoofNetwork             bool
+	tunnelDetection          bool
+	tunnelDetectionThreshold float64
+	ipPool                   *ippool.Pool
+	dnatManager              *dnat.Manager
+	dnatMap                  map[string]string // domain -> spoofed IP
+	dnatLock                 sync.RWMutex
 }
 
 type Config struct {
-	Enabled       bool
-	BindAddress   string
-	AnalysisIP    string // IP returned for all queries
-	CheckLiveness bool   // use upstream DNS to test server liveness
-	UpstreamDNS   string // DNS server to forward queries
-	SpoofNetwork  bool
-	DefaultSubnet string
+	Enabled                  bool
+	BindAddress              string
+	AnalysisIP               string
+	CheckLiveness            bool
+	UpstreamDNS              string
+	SpoofNetwork             bool
+	DefaultSubnet            string
+	TunnelDetection          bool
+	TunnelDetectionThreshold float64
 }
 
 func New(cfg Config) (*Server, error) {
@@ -68,14 +73,16 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	server := &Server{
-		bindAddress:   cfg.BindAddress,
-		analysisIP:    ip,
-		checkLiveness: cfg.CheckLiveness,
-		upstreamDNS:   cfg.UpstreamDNS,
-		SpoofNetwork:  cfg.SpoofNetwork,
-		ipPool:        pool,
-		dnatManager:   dnat.New(cfg.AnalysisIP),
-		dnatMap:       make(map[string]string),
+		bindAddress:              cfg.BindAddress,
+		analysisIP:               ip,
+		checkLiveness:            cfg.CheckLiveness,
+		upstreamDNS:              cfg.UpstreamDNS,
+		SpoofNetwork:             cfg.SpoofNetwork,
+		tunnelDetection:          cfg.TunnelDetection,
+		tunnelDetectionThreshold: cfg.TunnelDetectionThreshold,
+		ipPool:                   pool,
+		dnatManager:              dnat.New(cfg.AnalysisIP),
+		dnatMap:                  make(map[string]string),
 	}
 
 	// validate upstream DNS if liveness check is enabled
@@ -193,6 +200,19 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			"client", w.RemoteAddr().String(),
 		)
 
+		// attempt to detect tunneling by testing domain entropy
+		if s.tunnelDetection {
+			labels := strings.Split(strings.TrimSuffix(question.Name, "."), ".")
+			suspicious := labels[0]
+
+			entropy := inspect.Shannon([]byte(suspicious))
+			if entropy > s.tunnelDetectionThreshold {
+				logger.Warn("[dns] detected possible tunneling attempt", "domain", domain)
+				msg.SetRcode(r, dns.RcodeNameError)
+				continue
+			}
+		}
+
 		// check upstream DNS for domain if liveness check is enabled
 		exists, upstreamIP := s.resolveUpstream(question.Name, question.Qtype)
 
@@ -201,11 +221,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			msg.SetRcode(r, dns.RcodeNameError)
 			logger.Info("[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
 
-			if err = w.WriteMsg(msg); err != nil {
-				fmt.Fprintf(os.Stderr, "[dns] failed to write response: %v\n", err)
-			}
-
-			return
+			continue
 		}
 
 		var responseIP net.IP
@@ -230,7 +246,9 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 				responseIP = s.analysisIP
 			} else {
 				// Track mapping for cleanup
+				s.dnatLock.Lock()
 				s.dnatMap[domain] = responseIP.String()
+				s.dnatLock.Unlock()
 			}
 		} else {
 			// return analysis IP as fallback
@@ -244,7 +262,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 					Name:   question.Name,
 					Rrtype: dns.TypeA,
 					Class:  dns.ClassINET,
-					Ttl:    30,
+					Ttl:    1,
 				},
 				A: responseIP,
 			})
@@ -255,15 +273,19 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 				"spoofed", s.SpoofNetwork,
 			)
 		case dns.TypeAAAA:
-			logger.Info("[dns] ignoring AAAA query", "domain", question.Name)
+			logger.Info("[dns] returning NODATA for AAAA query", "domain", question.Name)
+			continue // sending NODATA for AAAA queries to attempt to force IPv4 fallback
 		case dns.TypeMX, dns.TypeNS, dns.TypeCNAME, dns.TypeTXT:
 			logger.Info("[dns] ignoring unsupported query", "type", dns.TypeToString[question.Qtype])
+			// TODO add capture support for these types
+			continue // sending NODATA for unsupported types
 		default:
 			logger.Info("[dns] unknown query type", "type", question.Qtype)
+			msg.SetRcode(r, dns.RcodeNameError)
 		}
 	}
 
-	if err := w.WriteMsg(msg); err != nil {
+	if err = w.WriteMsg(msg); err != nil {
 		fmt.Fprintf(os.Stderr, "[dns] failed to write response: %v\n", err)
 	}
 }

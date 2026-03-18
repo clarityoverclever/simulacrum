@@ -97,13 +97,15 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 
 	services := []core.Service{
 		dns.Init(dns.Config{
-			Enabled:       cfg.DNS.Enabled,
-			BindAddress:   cfg.DNS.BindAddress,
-			AnalysisIP:    cfg.DNS.AnalysisIP,
-			CheckLiveness: cfg.DNS.CheckLiveness,
-			UpstreamDNS:   cfg.DNS.UpstreamDNS,
-			SpoofNetwork:  cfg.DNS.SpoofNetwork,
-			DefaultSubnet: cfg.DNS.DefaultSubnet,
+			Enabled:                  cfg.DNS.Enabled,
+			BindAddress:              cfg.DNS.BindAddress,
+			AnalysisIP:               cfg.DNS.AnalysisIP,
+			CheckLiveness:            cfg.DNS.CheckLiveness,
+			UpstreamDNS:              cfg.DNS.UpstreamDNS,
+			SpoofNetwork:             cfg.DNS.SpoofNetwork,
+			DefaultSubnet:            cfg.DNS.DefaultSubnet,
+			TunnelDetection:          cfg.DNS.TunnelDetection,
+			TunnelDetectionThreshold: cfg.DNS.TunnelDetectionThreshold,
 		}),
 
 		http.Init(http.Config{
