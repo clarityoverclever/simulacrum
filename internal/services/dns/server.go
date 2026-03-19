@@ -208,7 +208,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			entropy := inspect.Shannon([]byte(suspicious))
 			if entropy > s.tunnelDetectionThreshold {
 				logger.Warn("[dns] detected possible tunneling attempt", "domain", domain)
-				msg.SetRcode(r, dns.RcodeNameError)
+				msg.SetRcode(r, dns.RcodeSuccess)
 				continue
 			}
 		}
