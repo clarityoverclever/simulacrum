@@ -15,6 +15,7 @@
 package dns
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"simulacrum/internal/core/logger"
 	"simulacrum/internal/services/dns/dnat"
 	"simulacrum/internal/services/dns/ippool"
+	"simulacrum/internal/services/responder"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +40,7 @@ type Server struct {
 	SpoofNetwork             bool
 	tunnelDetection          bool
 	tunnelDetectionThreshold float64
+	responderManager         *responder.Manager
 	ipPool                   *ippool.Pool
 	dnatManager              *dnat.Manager
 	dnatMap                  map[string]string // domain -> spoofed IP
@@ -54,6 +57,7 @@ type Config struct {
 	DefaultSubnet            string
 	TunnelDetection          bool
 	TunnelDetectionThreshold float64
+	ResponseManager          *responder.Manager
 }
 
 func New(cfg Config) (*Server, error) {
@@ -80,6 +84,7 @@ func New(cfg Config) (*Server, error) {
 		SpoofNetwork:             cfg.SpoofNetwork,
 		tunnelDetection:          cfg.TunnelDetection,
 		tunnelDetectionThreshold: cfg.TunnelDetectionThreshold,
+		responderManager:         cfg.ResponseManager,
 		ipPool:                   pool,
 		dnatManager:              dnat.New(cfg.AnalysisIP),
 		dnatMap:                  make(map[string]string),
@@ -191,13 +196,16 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	msg.SetReply(r)
 	msg.Authoritative = true
 
+	clientAddr := w.RemoteAddr().String()
+	clientIP, _, _ := net.SplitHostPort(clientAddr)
+
 	for _, question := range r.Question {
 		domain := strings.TrimSuffix(question.Name, ".")
 
 		logger.Info("[dns] query",
 			"domain", domain,
 			"type", dns.TypeToString[question.Qtype],
-			"client", w.RemoteAddr().String(),
+			"client", clientAddr,
 		)
 
 		// attempt to detect tunneling by testing domain entropy
@@ -240,7 +248,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			}
 
 			// add DNAT rule
-			if err := s.dnatManager.AddDNAT(responseIP.String()); err != nil {
+			if err = s.dnatManager.AddDNAT(responseIP.String()); err != nil {
 				logger.Error("[dns] failed to add DNAT", "error", err)
 				// Fall back to analysis IP
 				responseIP = s.analysisIP
@@ -272,6 +280,25 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 				"returned_ip", responseIP.String(),
 				"spoofed", s.SpoofNetwork,
 			)
+
+			// run request through responder
+			if s.responderManager != nil {
+				var result responder.Result
+				logger.Info("[dns] sending responder request")
+				req := responder.RequestContext{
+					Key:    responder.Key(clientIP),
+					Kind:   responder.KindDNS,
+					Source: clientIP,
+					Target: domain,
+					Meta:   map[string]string{"qtype": dns.TypeToString[question.Qtype]},
+					Now:    time.Now(),
+				}
+				if result, err = s.responderManager.Handle(context.Background(), req); err != nil {
+					logger.Warn("[dns] responder handle error", "error", err)
+				}
+
+				fmt.Printf("[dns] responder result: %s\n", result.Decision)
+			}
 		case dns.TypeAAAA:
 			logger.Info("[dns] returning NODATA for AAAA query", "domain", question.Name)
 			continue // sending NODATA for AAAA queries to attempt to force IPv4 fallback

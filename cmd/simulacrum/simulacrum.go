@@ -29,11 +29,13 @@ import (
 	"simulacrum/internal/services/http"
 	"simulacrum/internal/services/https"
 	"simulacrum/internal/services/ntp"
+	"simulacrum/internal/services/responder"
 	"simulacrum/internal/services/web"
 	"syscall"
 	"time"
 )
 
+// main entry point for Simulacrum and initializes core components
 func main() {
 	// initialize configuration
 	cfg, err := config.Load("./config/config.yaml")
@@ -48,7 +50,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("starting Simulacrum version: 0.2.0")
+	fmt.Println("starting Simulacrum version: 0.3.0")
 
 	// capture and process terminating signals
 	quit := make(chan os.Signal, 1)
@@ -60,12 +62,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Simulacrum stopped")
+	fmt.Printf("\nSimulacrum stopped\n")
 }
 
 func run(cfg *config.Config, quit <-chan os.Signal) error {
 	var err error
-	errChan := make(chan error, 3)
+	errChan := make(chan error, len(services))
 
 	fmt.Println("[ipc] initializing service")
 	sockMan, err := core.New("/tmp/simulacrum")
@@ -95,6 +97,21 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	}
 	fmt.Println("[tls] TLS provider initialized")
 
+	var respManager *responder.Manager
+	if cfg.Responder.Enabled {
+		fmt.Println("[responder] initializing service")
+		pool := responder.NewPool(cfg.Responder.PoolSize)
+		store := responder.NewMemoryStore()
+		resolver, err := responder.NewResolver(cfg.Responder.RulesPath)
+		if err != nil {
+			return fmt.Errorf("failed to initialize responder service: %w", err)
+		}
+
+		respManager = responder.NewManager(pool, store, resolver)
+
+		fmt.Println("[responder] service started")
+	}
+
 	services := []core.Service{
 		dns.Init(dns.Config{
 			Enabled:                  cfg.DNS.Enabled,
@@ -106,6 +123,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			DefaultSubnet:            cfg.DNS.DefaultSubnet,
 			TunnelDetection:          cfg.DNS.TunnelDetection,
 			TunnelDetectionThreshold: cfg.DNS.TunnelDetectionThreshold,
+			ResponseManager:          respManager,
 		}),
 
 		http.Init(http.Config{
@@ -154,7 +172,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	case err = <-errChan:
 		return err
 	case <-quit:
-		fmt.Println("Simulacrum terminating")
+		fmt.Printf("\nSimulacrum terminating")
 	}
 
 	return nil

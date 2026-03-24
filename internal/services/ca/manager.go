@@ -43,6 +43,7 @@ type Config struct {
 	LeafValidityDays time.Duration
 }
 
+// NewManager creates a new CA manager.
 func NewManager(cfg Config) (*Manager, error) {
 	m := &Manager{cfg: cfg}
 
@@ -52,6 +53,7 @@ func NewManager(cfg Config) (*Manager, error) {
 	return m, nil
 }
 
+// loadOrCreateRootCert loads or creates the CA root certificate and key.
 func (m *Manager) loadOrCreateRootCert() error {
 	_, certErr := os.Stat(m.cfg.CertFile)
 	_, keyErr := os.Stat(m.cfg.KeyFile)
@@ -79,6 +81,7 @@ func (m *Manager) loadOrCreateRootCert() error {
 	return nil
 }
 
+// createRootCert generates a new CA root certificate and key.
 func (m *Manager) createRootCert() error {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -121,6 +124,7 @@ func (m *Manager) createRootCert() error {
 	return nil
 }
 
+// loadRoot loads the CA root certificate and key from disk.
 func (m *Manager) loadRoot() error {
 	certPEM, err := os.ReadFile(m.cfg.CertFile)
 	if err != nil {
@@ -156,6 +160,7 @@ func (m *Manager) loadRoot() error {
 	return nil
 }
 
+// IssueServerCertificate generates a new server leaf certificate signed by the CA root certificate.
 func (m *Manager) IssueServerCertificate(serverName string) (*tls.Certificate, error) {
 	if m.rootCert == nil || m.rootKey == nil {
 		return nil, fmt.Errorf("root certificate or key not loaded")
@@ -229,6 +234,7 @@ func (m *Manager) IssueServerCertificate(serverName string) (*tls.Certificate, e
 	return &tlsCert, nil
 }
 
+// randomSerialNumber generates a random serial number.
 func randomSerialNumber() (*big.Int, error) {
 	limit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, limit)
@@ -238,6 +244,7 @@ func randomSerialNumber() (*big.Int, error) {
 	return serialNumber, nil
 }
 
+// writeCertPEM writes a certificate to disk in PEM format.
 func writeCertPEM(path string, der []byte) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -257,6 +264,7 @@ func writeCertPEM(path string, der []byte) error {
 	return nil
 }
 
+// writeKeyPEM writes a private key to disk in PEM format.
 func writeKeyPEM(path string, key *rsa.PrivateKey) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {

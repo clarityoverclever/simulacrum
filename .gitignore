@@ -9,9 +9,11 @@
 
 # Test binary, built with `go test -c`
 *.test
+*_test.go
 
 # Output of the go coverage tool
 *.out
+*.sh
 
 # Go workspace file
 go.work

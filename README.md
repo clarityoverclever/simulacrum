@@ -20,7 +20,6 @@ Simulacrum aims to bridge the gap by providing a modern network simulator design
 - dynamic TLS minting with a pre-installed trusted root to prevent broken handshakes and capture encrypted traffic
 - time manipulation via an NTP multiplier
 - structured logging for analysis
-- handcrafted, artisanal, go. No vibes, just code.
 
 ### DNS
 - Serves DNS on configurable port

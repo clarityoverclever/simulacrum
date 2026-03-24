@@ -24,6 +24,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 )
 
+// GetXxHash returns a hex string of the xxhash of the data
 func GetXxHash(data []byte) (string, error) {
 	hasher := xxhash.New()
 	_, err := hasher.Write(data)
@@ -34,6 +35,7 @@ func GetXxHash(data []byte) (string, error) {
 	return strconv.FormatUint(hasher.Sum64(), 16), nil
 }
 
+// SaveContentWithHashName saves content to a file with a name based on its xxhash.
 func SaveContentWithHashName(data io.Reader) (string, error) {
 	temp, err := os.CreateTemp("", "capture-*.tmp")
 	if err != nil {

@@ -8,6 +8,7 @@ require (
 	github.com/miekg/dns v1.1.72
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/spf13/cobra v1.10.2
+	github.com/yuin/gopher-lua v1.1.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 

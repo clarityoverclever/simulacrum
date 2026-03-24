@@ -23,6 +23,7 @@ import (
 	"github.com/natefinch/lumberjack"
 )
 
+// Init initializes the logger
 func Init(level slog.Level, logFilePath string) error {
 	logDir := filepath.Dir(logFilePath)
 
@@ -48,18 +49,22 @@ func Init(level slog.Level, logFilePath string) error {
 	return nil
 }
 
+// Info logs a message
 func Info(msg string, args ...any) {
 	slog.Info(msg, args...)
 }
 
+// Error logs an error
 func Error(msg string, args ...any) {
 	slog.Error(msg, args...)
 }
 
+// Debug logs a debug message
 func Debug(msg string, args ...any) {
 	slog.Debug(msg, args...)
 }
 
+// Warn logs a warning
 func Warn(msg string, args ...any) {
 	slog.Warn(msg, args...)
 }

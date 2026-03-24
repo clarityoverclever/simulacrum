@@ -71,6 +71,12 @@ type CAConfig struct {
 	LeafValidityDays int    `yaml:"leaf_validity_days"`
 }
 
+type ResponderConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	RulesPath string `yaml:"rules_path"`
+	PoolSize  int    `yaml:"pool_size"`
+}
+
 type Config struct {
 	DNS       DnsConfig       `yaml:"dns"`
 	NTP       NtpConfig       `yaml:"ntp"`
@@ -79,6 +85,7 @@ type Config struct {
 	CommonWeb CommonWebConfig `yaml:"common_web"`
 	TLS       TlsConfig       `yaml:"tls"`
 	CA        CAConfig        `yaml:"ca"`
+	Responder ResponderConfig `yaml:"responder"`
 }
 
 func Load(path string) (*Config, error) {

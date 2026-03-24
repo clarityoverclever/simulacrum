@@ -49,10 +49,12 @@ var mimes = map[string]string{
 	".dat": "application/octet-stream",
 }
 
+// NewHandler creates a new HTTP handler with the provided configuration.
 func NewHandler(cfg HandlerConfig) *Handler {
 	return &Handler{cfg: cfg}
 }
 
+// HandleRequest routes incoming HTTP requests to the appropriate handler based on the request method.
 func (h *Handler) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	h.LogRequest(r)
 
@@ -66,6 +68,7 @@ func (h *Handler) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleGet handles incoming GET requests and serves agent files or default HTML response.
 func (h *Handler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.SpoofPayload {
 		leaf := r.PathValue("path")
@@ -87,6 +90,7 @@ func (h *Handler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandlePost handles incoming POST requests and captures the body as a Base64 encoded string into a file.
 func (h *Handler) HandlePost(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[%s] POST received\n", h.cfg.ServiceName)
 
@@ -135,6 +139,7 @@ func (h *Handler) HandlePost(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ServeFile serves an agent file based on the file type.
 func (h *Handler) ServeFile(w http.ResponseWriter, fileName string, fileType string, contentType string) {
 	logger.Info(fmt.Sprintf("[%s] Serving agent payload", h.cfg.ServiceName), "file_type", fileType)
 
@@ -185,6 +190,7 @@ func (h *Handler) ServeFile(w http.ResponseWriter, fileName string, fileType str
 	}
 }
 
+// LogRequest logs incoming HTTP requests with details.
 func (h *Handler) LogRequest(r *http.Request) {
 	logger.Info(fmt.Sprintf("[%s] request received", h.cfg.ServiceName),
 		"client", r.RemoteAddr,
@@ -209,6 +215,7 @@ func (h *Handler) LogRequest(r *http.Request) {
 	}
 }
 
+// CapturePostBody captures POST request body and writes it to disk.
 func (h *Handler) CapturePostBody(file string, data []byte) error {
 	var err error
 	path := "./captures/"

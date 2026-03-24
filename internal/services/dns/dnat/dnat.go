@@ -28,6 +28,7 @@ func New(analysisIP string) *Manager {
 	return &Manager{analysisIP: analysisIP}
 }
 
+// AddDNAT adds a DNAT rule to the system's iptables to redirect traffic from a spoofed IP to the analysis IP.'
 func (m *Manager) AddDNAT(spoofedIP string) error {
 	logger.Info("[dnat] adding DNAT rule",
 		"spoofedIP", spoofedIP,
@@ -49,6 +50,7 @@ func (m *Manager) AddDNAT(spoofedIP string) error {
 	return nil
 }
 
+// RemoveDNAT removes a DNAT rule from the system's iptables to stop redirecting traffic from a spoofed IP to the analysis IP.
 func (m *Manager) RemoveDNAT(spoofedIP string) error {
 	logger.Info("[dnat] removing rule",
 		"spoofedIP", spoofedIP,
@@ -70,6 +72,7 @@ func (m *Manager) RemoveDNAT(spoofedIP string) error {
 	return nil
 }
 
+// FlushAll removes all DNAT rules from the system's iptables to stop redirecting traffic from spoofed IPs to the analysis IP.
 func (m *Manager) FlushAll() error {
 	cmd := "iptables -t nat -F PREROUTING"
 	return exec.Command("sh", "-c", cmd).Run()
