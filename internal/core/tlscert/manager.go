@@ -25,6 +25,7 @@ type Manager struct {
 	provider CertificateProvider
 }
 
+// NewManager creates a new TLS certificate manager
 func NewManager(tlsCfg TLSConfig, caCfg ca.Config) (*Manager, error) {
 	provider, err := newProvider(tlsCfg, caCfg)
 	if err != nil {
@@ -34,14 +35,17 @@ func NewManager(tlsCfg TLSConfig, caCfg ca.Config) (*Manager, error) {
 	return &Manager{cfg: tlsCfg, provider: provider}, nil
 }
 
+// Provider returns the configured certificate provider
 func (m *Manager) Provider() CertificateProvider {
 	return m.provider
 }
 
+// Mode returns the TLS mode configuration
 func (m *Manager) Mode() string {
 	return m.cfg.Mode
 }
 
+// newProvider creates a new certificate provider based on the TLS configuration
 func newProvider(tlsCfg TLSConfig, caCfg ca.Config) (CertificateProvider, error) {
 	err := tlsCfg.Validate()
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"strings"
 )
 
+// NormalizeServerName normalizes the server name to a valid DNS name
 func NormalizeServerName(serverName string) (string, error) {
 	name := strings.TrimSpace(strings.ToLower(serverName))
 	if name == "" {

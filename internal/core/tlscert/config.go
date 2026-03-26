@@ -22,6 +22,7 @@ type TLSConfig struct {
 	Key  string
 }
 
+// Validate validates the TLS configuration
 func (c *TLSConfig) Validate() error {
 	if c.Mode == "" {
 		return fmt.Errorf("mode cannot be empty")

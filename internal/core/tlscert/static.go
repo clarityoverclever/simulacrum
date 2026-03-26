@@ -14,7 +14,19 @@
 
 package tlscert
 
-type Policy struct {
-	AllowIPAddress    bool
-	RequireServerName bool
+import (
+	"crypto/tls"
+	"fmt"
+)
+
+type StaticProvider struct {
+	Certificate *tls.Certificate
+}
+
+func (p *StaticProvider) GetCertificate(serverName string) (*tls.Certificate, error) {
+	if p == nil || p.Certificate == nil {
+		return nil, fmt.Errorf("[tls] no certificate provided")
+	}
+
+	return p.Certificate, nil
 }

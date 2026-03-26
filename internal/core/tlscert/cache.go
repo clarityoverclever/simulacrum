@@ -27,6 +27,7 @@ type CachingProvider struct {
 	cache map[string]*tls.Certificate
 }
 
+// NewCachingProvider returns a new CachingProvider that caches certificates issued by the given Issuer.
 func NewCachingProvider(issuer Issuer) *CachingProvider {
 	return &CachingProvider{
 		issuer: issuer,
@@ -34,6 +35,7 @@ func NewCachingProvider(issuer Issuer) *CachingProvider {
 	}
 }
 
+// GetCertificate retrieves a cached certificate for the given server name, or issues a new one if not found.
 func (p *CachingProvider) GetCertificate(serverName string) (*tls.Certificate, error) {
 	name, err := NormalizeServerName(serverName)
 	if err != nil {
