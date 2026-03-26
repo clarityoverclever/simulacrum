@@ -1,0 +1,37 @@
+dns:
+  enabled: true
+  bind_addr: 0.0.0.0:53
+  analysis_ip: 192.168.117.128
+  check_liveness: true
+  upstream_dns: 9.9.9.9:53
+  spoof_network: true
+  default_subnet: 10.0.1.0/8
+  enable_tunnel_detection: true
+  tunnel_detection_threshold: 4.0
+ntp:
+  enabled: true
+  bind_addr: 0.0.0.0:123
+  multiplier: 1.0
+http:
+  enabled: true
+  bind_addr: 0.0.0.0:80
+https:
+  enabled: true
+  bind_addr: 0.0.0.0:443
+common_web:
+  log_headers: false
+  spoof_payload: true
+  max_body_kb: 64
+tls:
+  cert_mode: dynamic
+ca:
+  cert_file: ./certs/ca.crt
+  key_file: ./certs/ca.key
+  common_name: "Simulacrum Root CA"
+  organization: "Simulacrum"
+  root_validity_days: 3650
+  leaf_validity_days: 7
+responder:
+  enabled: true
+  rules_path: ./rules
+  pool_size: 4

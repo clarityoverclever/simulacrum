@@ -42,7 +42,7 @@ import (
 // main entry point for Simulacrum and initializes core components
 func main() {
 	// initialize configuration
-	cfg, err := config.Load("./config/config.yaml")
+	cfg, err := config.LoadOrCreate("./config/config.yaml")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "--- CONFIG LOAD FAILURE --- : %v\n", err)
 		os.Exit(1)

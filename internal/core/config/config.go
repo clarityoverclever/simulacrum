@@ -15,12 +15,16 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v2"
 )
+
+//go:embed static/default.yaml
+var defaultConfig []byte
 
 type DnsConfig struct {
 	Enabled                  bool    `yaml:"enabled"`
@@ -88,25 +92,16 @@ type Config struct {
 	Responder ResponderConfig `yaml:"responder"`
 }
 
-func Load(path string) (*Config, error) {
+// LoadOrCreate loads a config file from disk, or creates a new one if it doesn't exist'
+func LoadOrCreate(path string) (*Config, error) {
 	var err error
 	cfg := &Config{}
 
-	configDir := filepath.Dir(path)
-
-	if err = os.MkdirAll(configDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create configuration directory: %w", err)
-	}
-
 	if _, err = os.Stat(path); os.IsNotExist(err) {
-		//  TODO: add config file template from embedded resources
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		err = CreateConfig(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create config file: %w", err)
+			return nil, fmt.Errorf("failed to create default config: %w", err)
 		}
-
-		fmt.Println("creating empty config file: ", path)
-		defer f.Close()
 	}
 
 	data, err := os.ReadFile(path)
@@ -120,4 +115,18 @@ func Load(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// CreateConfig creates a new config file from the embedded default
+func CreateConfig(path string) error {
+	err := os.MkdirAll(filepath.Dir(path), 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	err = os.WriteFile(path, defaultConfig, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write default config: %w", err)
+	}
+	return nil
 }
