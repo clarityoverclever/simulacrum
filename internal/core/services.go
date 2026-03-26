@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"simulacrum/internal/core/socket"
 )
 
 type Status string
@@ -56,7 +57,7 @@ type Service interface {
 }
 
 func SendControlMessage(message ControlMessage) error {
-	sockMan, err := New("/tmp/simulacrum")
+	sockMan, err := socket.NewManager("/tmp/simulacrum")
 	if err != nil {
 		fmt.Printf("Failed to create socket manager: %v\n", err)
 		os.Exit(1)

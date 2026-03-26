@@ -25,6 +25,7 @@ import (
 	"simulacrum/internal/core"
 	"simulacrum/internal/core/config"
 	"simulacrum/internal/core/logger"
+	"simulacrum/internal/core/socket"
 	"simulacrum/internal/core/tlscert"
 	"simulacrum/internal/services/ca"
 	"simulacrum/internal/services/dns"
@@ -69,19 +70,22 @@ func main() {
 	fmt.Printf("\nSimulacrum stopped\n")
 }
 
+// run initializes core services and runs the main loop
 func run(cfg *config.Config, quit <-chan os.Signal) error {
 	var err error
 
-	fmt.Println("[ipc] initializing service")
-	sockMan, err := core.New("/tmp/simulacrum")
+	// initialize core services: ipc, tls, responder
+	fmt.Println("[core] initializing core services")
+
+	// initialize socket manager for interprocess communication
+	socketManager, err := socket.NewManager("/tmp/simulacrum")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize socket manager: %w", err)
 	}
 
-	defer sockMan.Close("/tmp/simulacrum")
-	fmt.Println("[ipc] service started")
+	defer socketManager.Close("/tmp/simulacrum")
 
-	fmt.Println("[tls] initializing service")
+	// initialize TLS provider and certificate authority
 	tlsManager, err := tlscert.NewManager(tlscert.TLSConfig{
 		Mode: cfg.TLS.Mode,
 		Cert: cfg.TLS.Cert,
@@ -98,11 +102,10 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize TLS provider: %w", err)
 	}
-	fmt.Println("[tls] TLS provider initialized")
 
-	var respManager *responder.Manager
+	// initialize response manager
+	var responseManager *responder.Manager
 	if cfg.Responder.Enabled {
-		fmt.Println("[responder] initializing service")
 		pool := responder.NewPool(cfg.Responder.PoolSize)
 		store := responder.NewMemoryStore()
 		resolver, err := responder.NewResolver(cfg.Responder.RulesPath)
@@ -110,10 +113,11 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			return fmt.Errorf("failed to initialize responder service: %w", err)
 		}
 
-		respManager = responder.NewManager(pool, store, resolver)
-
-		fmt.Println("[responder] service started")
+		responseManager = responder.NewManager(pool, store, resolver)
 	}
+
+	// initialize listener services: dns, http, https, ntp
+	fmt.Println("[core] starting listeners")
 
 	services := []core.Service{
 		dns.Init(dns.Config{
@@ -126,7 +130,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			DefaultSubnet:            cfg.DNS.DefaultSubnet,
 			TunnelDetection:          cfg.DNS.TunnelDetection,
 			TunnelDetectionThreshold: cfg.DNS.TunnelDetectionThreshold,
-			ResponseManager:          respManager,
+			ResponseManager:          responseManager,
 		}),
 
 		http.Init(http.Config{
@@ -159,21 +163,22 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		}),
 	}
 
+	// add context for managing listener services
 	ctx := context.Background()
-	g, ctx := errgroup.WithContext(ctx)
+	group, ctx := errgroup.WithContext(ctx)
 
 	// track listeners so they can be closed on shutdown
 	listeners := make([]net.Listener, 0, len(services))
 
 	for _, service := range services {
-		listener, err := sockMan.Create(service.Name())
+		listener, err := socketManager.Create(service.Name())
 		if err != nil {
 			return err
 		}
 
 		listeners = append(listeners, listener)
 
-		g.Go(func() error {
+		group.Go(func() error {
 			err = service.Run(listener)
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
@@ -186,7 +191,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	}
 
 	// wait for terminating signals and close listeners
-	g.Go(func() error {
+	group.Go(func() error {
 		<-quit
 		fmt.Printf("\nterminating services")
 		for _, listener := range listeners {
@@ -195,5 +200,5 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		return nil
 	})
 
-	return g.Wait()
+	return group.Wait()
 }

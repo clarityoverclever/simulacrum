@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package core
+package socket
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ type manager struct {
 	baseDir string
 }
 
-func New(baseDir string) (*manager, error) {
+func NewManager(baseDir string) (*manager, error) {
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return nil, err
 	}

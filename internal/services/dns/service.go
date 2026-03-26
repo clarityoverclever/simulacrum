@@ -32,7 +32,6 @@ type Service struct {
 }
 
 func Init(cfg Config) *Service {
-	fmt.Println("[dns] initializing service")
 	return &Service{
 		state:  core.StatusStopped,
 		config: cfg,
@@ -157,7 +156,6 @@ func (s *Service) start() error {
 	}()
 
 	s.state = core.StatusRunning
-	fmt.Println("[dns] server started")
 	return nil
 }
 
@@ -177,7 +175,6 @@ func (s *Service) stop() error {
 	}
 
 	s.state = core.StatusStopped
-	fmt.Println("[dns] server stopped")
 	return nil
 }
 
