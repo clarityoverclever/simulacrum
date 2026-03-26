@@ -15,6 +15,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -33,6 +35,8 @@ import (
 	"simulacrum/internal/services/web"
 	"syscall"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // main entry point for Simulacrum and initializes core components
@@ -67,7 +71,6 @@ func main() {
 
 func run(cfg *config.Config, quit <-chan os.Signal) error {
 	var err error
-	errChan := make(chan error, len(services))
 
 	fmt.Println("[ipc] initializing service")
 	sockMan, err := core.New("/tmp/simulacrum")
@@ -156,24 +159,41 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		}),
 	}
 
+	ctx := context.Background()
+	g, ctx := errgroup.WithContext(ctx)
+
+	// track listeners so they can be closed on shutdown
+	listeners := make([]net.Listener, 0, len(services))
+
 	for _, service := range services {
 		listener, err := sockMan.Create(service.Name())
 		if err != nil {
 			return err
 		}
 
-		go func(s core.Service, listener net.Listener) {
-			errChan <- s.Run(listener)
-		}(service, listener)
+		listeners = append(listeners, listener)
+
+		g.Go(func() error {
+			err = service.Run(listener)
+			if err != nil {
+				if errors.Is(err, net.ErrClosed) {
+					return nil
+				}
+				return fmt.Errorf("service %s failed: %w", service.Name(), err)
+			}
+			return nil
+		})
 	}
 
-	// wait for termination signal
-	select {
-	case err = <-errChan:
-		return err
-	case <-quit:
-		fmt.Printf("\nSimulacrum terminating")
-	}
+	// wait for terminating signals and close listeners
+	g.Go(func() error {
+		<-quit
+		fmt.Printf("\nterminating services")
+		for _, listener := range listeners {
+			_ = listener.Close()
+		}
+		return nil
+	})
 
-	return nil
+	return g.Wait()
 }
