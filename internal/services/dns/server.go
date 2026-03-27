@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"golang.org/x/net/publicsuffix"
 )
 
 type Server struct {
@@ -143,13 +144,20 @@ func (s *Server) resolveUpstream(domain string, qtype uint16) (bool, net.IP) {
 	if !s.checkLiveness {
 		return true, nil // always return success if upstream checking is disabled
 	}
-	// todo replace with SoA test to hide tunnel data from updstream
+
+	// extract apex domain for the upstream query to counter dns tunneling
+	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
+	apex, err := publicsuffix.EffectiveTLDPlusOne(domain)
+	if err != nil {
+		logger.Warn("[dns] failed to resolve apex domain", "domain", domain, "error", err)
+		return true, nil // fail open if apex domain isolation fails
+	}
 
 	c := new(dns.Client)
 	c.Timeout = 2 * time.Second
 
 	m := new(dns.Msg)
-	m.SetQuestion(domain, qtype)
+	m.SetQuestion(dns.Fqdn(apex), qtype)
 	m.RecursionDesired = true
 
 	r, _, err := c.Exchange(m, s.upstreamDNS)
@@ -194,6 +202,57 @@ func (s *Server) resolveUpstream(domain string, qtype uint16) (bool, net.IP) {
 	}
 }
 
+// testIsAliveUpstream checks the live status of a domain with an SOA query.
+func (s *Server) testIsAliveUpstream(domain string) bool {
+	if !s.checkLiveness {
+		return true // always return success if upstream checking is disabled
+	}
+
+	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
+	apex, err := publicsuffix.EffectiveTLDPlusOne(domain)
+	if err != nil {
+		logger.Warn("[dns] failed to resolve apex domain", "domain", domain, "error", err)
+		return true // fail open if apex domain isolation fails
+	}
+
+	c := new(dns.Client)
+	c.Timeout = 2 * time.Second
+
+	m := new(dns.Msg)
+	m.SetQuestion(dns.Fqdn(apex), dns.TypeSOA)
+	m.RecursionDesired = true
+
+	r, _, err := c.Exchange(m, s.upstreamDNS)
+	if err != nil {
+		logger.Warn("[dns] upstream DNS check failed",
+			"domain", domain,
+			"error", err)
+		return true // fail open if upstream check fails
+	}
+
+	// check response code
+	switch r.Rcode {
+	case dns.RcodeSuccess:
+		logger.Info("[dns] upstream DNS check succeeded",
+			"domain", domain,
+		)
+		return true
+	case dns.RcodeNameError: // NXDOMAIN
+		logger.Info("[dns] upstream DNS check failed",
+			"domain", domain,
+			"error", "NXDOMAIN",
+		)
+		return false
+	default:
+		logger.Warn("[dns] upstream DNS check failed",
+			"domain", domain,
+			"rcode", dns.RcodeToString[r.Rcode],
+		)
+		return true // fail open
+	}
+}
+
+// testEntropy checks the entropy of a domain to detect potential tunneling.
 func (s *Server) testEntropy(target string) (bool, float64) {
 	labels := strings.Split(strings.TrimSuffix(target, "."), ".")
 	suspicious := labels[0]
@@ -235,9 +294,9 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		}
 
 		// check upstream DNS for domain if liveness check is enabled
-		isAliveUpstream, upstreamIP := s.resolveUpstream(question.Name, question.Qtype)
+		isResolvedUpstream, upstreamIP := s.resolveUpstream(question.Name, question.Qtype)
 
-		if !isAliveUpstream {
+		if !isResolvedUpstream {
 			// return NXDOMAIN if upstream check fails
 			msg.SetRcode(r, dns.RcodeNameError)
 			logger.Info("[dns] returning NXDOMAIN for non-existent domain", "domain", domain)

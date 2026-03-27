@@ -5,7 +5,7 @@ local key = request.key
 -- Look up any existing record for this key
 local rec = Get(key)
 
-print("using localhost rule")
+print("using default rule")
 if rec == nil then
   print("no existing record for:", key)
 

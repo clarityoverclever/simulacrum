@@ -71,5 +71,9 @@ func (r *Resolver) GetRule(name string) (string, bool) {
 	key := strings.ToLower(name)
 
 	rule, ok := r.Rules[key]
+	if !ok {
+		rule, ok = r.Rules["default"]
+	}
+
 	return rule, ok
 }
