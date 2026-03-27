@@ -98,6 +98,7 @@ func New(cfg Config) (*Server, error) {
 	return server, nil
 }
 
+// Start starts the DNS server.
 func (s *Server) Start() error {
 	dns.HandleFunc(".", s.handleDNSRequest)
 
@@ -111,6 +112,7 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Stop stops the DNS server.
 func (s *Server) Stop() error {
 	if s.dnsServer != nil {
 		fmt.Println("[dns] stopping server")
@@ -136,10 +138,12 @@ func (s *Server) Stop() error {
 	return nil
 }
 
+// resolveUpstream checks the live status of a domain by querying an upstream DNS server.
 func (s *Server) resolveUpstream(domain string, qtype uint16) (bool, net.IP) {
 	if !s.checkLiveness {
 		return true, nil // always return success if upstream checking is disabled
 	}
+	// todo replace with SoA test to hide tunnel data from updstream
 
 	c := new(dns.Client)
 	c.Timeout = 2 * time.Second
@@ -190,6 +194,18 @@ func (s *Server) resolveUpstream(domain string, qtype uint16) (bool, net.IP) {
 	}
 }
 
+func (s *Server) testEntropy(target string) (bool, float64) {
+	labels := strings.Split(strings.TrimSuffix(target, "."), ".")
+	suspicious := labels[0]
+
+	entropy := inspect.Shannon([]byte(suspicious))
+
+	if entropy > s.tunnelDetectionThreshold {
+		return true, entropy
+	}
+	return false, entropy
+}
+
 func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	var err error
 	msg := new(dns.Msg)
@@ -209,22 +225,19 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		)
 
 		// attempt to detect tunneling by testing domain entropy
-		if s.tunnelDetection {
-			labels := strings.Split(strings.TrimSuffix(question.Name, "."), ".")
-			suspicious := labels[0]
+		isTunnel, score := s.testEntropy(question.Name)
 
-			entropy := inspect.Shannon([]byte(suspicious))
-			if entropy > s.tunnelDetectionThreshold {
-				logger.Warn("[dns] detected possible tunneling attempt", "domain", domain)
-				msg.SetRcode(r, dns.RcodeSuccess)
-				continue
-			}
+		// todo pass isTunnel to responder for decision
+		if isTunnel {
+			logger.Warn("[dns] possible tunneling detected", "domain", domain, "entropy", score)
+			msg.SetRcode(r, dns.RcodeSuccess)
+			continue
 		}
 
 		// check upstream DNS for domain if liveness check is enabled
-		exists, upstreamIP := s.resolveUpstream(question.Name, question.Qtype)
+		isAliveUpstream, upstreamIP := s.resolveUpstream(question.Name, question.Qtype)
 
-		if !exists {
+		if !isAliveUpstream {
 			// return NXDOMAIN if upstream check fails
 			msg.SetRcode(r, dns.RcodeNameError)
 			logger.Info("[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
