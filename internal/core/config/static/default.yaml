@@ -6,7 +6,6 @@ dns:
   upstream_dns: 9.9.9.9:53
   spoof_network: true
   default_subnet: 10.0.1.0/8
-  enable_tunnel_detection: true
   tunnel_detection_threshold: 4.0
 ntp:
   enabled: true

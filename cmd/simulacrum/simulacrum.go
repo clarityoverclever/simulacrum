@@ -128,7 +128,6 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			UpstreamDNS:              cfg.DNS.UpstreamDNS,
 			SpoofNetwork:             cfg.DNS.SpoofNetwork,
 			DefaultSubnet:            cfg.DNS.DefaultSubnet,
-			TunnelDetection:          cfg.DNS.TunnelDetection,
 			TunnelDetectionThreshold: cfg.DNS.TunnelDetectionThreshold,
 			ResponseManager:          responseManager,
 		}),

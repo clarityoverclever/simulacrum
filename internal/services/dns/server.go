@@ -83,7 +83,6 @@ func New(cfg Config) (*Server, error) {
 		checkLiveness:            cfg.CheckLiveness,
 		upstreamDNS:              cfg.UpstreamDNS,
 		SpoofNetwork:             cfg.SpoofNetwork,
-		tunnelDetection:          cfg.TunnelDetection,
 		tunnelDetectionThreshold: cfg.TunnelDetectionThreshold,
 		responderManager:         cfg.ResponseManager,
 		ipPool:                   pool,
@@ -265,6 +264,19 @@ func (s *Server) testEntropy(target string) (bool, float64) {
 	return false, entropy
 }
 
+func (s *Server) addDNAT(IP net.IP, domain string) error {
+	if err := s.dnatManager.AddDNAT(IP.String()); err != nil {
+		return fmt.Errorf("failed to add DNAT: %w", err)
+	}
+
+	// Track mapping for cleanup
+	s.dnatLock.Lock()
+	s.dnatMap[domain] = IP.String()
+	s.dnatLock.Unlock()
+
+	return nil
+}
+
 func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	var err error
 	msg := new(dns.Msg)
@@ -275,6 +287,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	clientIP, _, _ := net.SplitHostPort(clientAddr)
 
 	for _, question := range r.Question {
+		// extract domain with subdomain from question
 		domain := strings.TrimSuffix(question.Name, ".")
 
 		logger.Info("[dns] query",
@@ -286,7 +299,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		// attempt to detect tunneling by testing domain entropy
 		isTunnel, score := s.testEntropy(question.Name)
 
-		// todo pass isTunnel to responder for decision
+		// todo move decisions to resolver
 		if isTunnel {
 			logger.Warn("[dns] possible tunneling detected", "domain", domain, "entropy", score)
 			msg.SetRcode(r, dns.RcodeSuccess)
@@ -296,6 +309,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		// check upstream DNS for domain if liveness check is enabled
 		isResolvedUpstream, upstreamIP := s.resolveUpstream(question.Name, question.Qtype)
 
+		// todo move decisions to resolver
 		if !isResolvedUpstream {
 			// return NXDOMAIN if upstream check fails
 			msg.SetRcode(r, dns.RcodeNameError)
@@ -306,6 +320,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 
 		var responseIP net.IP
 
+		// todo extract spoof method as lspoof and rspoof
 		if s.SpoofNetwork && question.Qtype == dns.TypeA {
 			if upstreamIP != nil {
 				// spoof network if upstream IP is available
@@ -320,15 +335,10 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			}
 
 			// add DNAT rule
-			if err = s.dnatManager.AddDNAT(responseIP.String()); err != nil {
-				logger.Error("[dns] failed to add DNAT", "error", err)
-				// Fall back to analysis IP
+			err = s.addDNAT(responseIP, domain)
+			if err != nil {
+				logger.Error("[dns] failed to add DNAT rule", "error", err)
 				responseIP = s.analysisIP
-			} else {
-				// Track mapping for cleanup
-				s.dnatLock.Lock()
-				s.dnatMap[domain] = responseIP.String()
-				s.dnatLock.Unlock()
 			}
 		} else {
 			// return analysis IP as fallback
