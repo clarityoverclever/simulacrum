@@ -1,63 +1,109 @@
--- responder_demo.lua
+-- rules/default.lua
 
+-- create local variables
 local key = request.key
+local target = request.target
+local type = request.meta["qtype"]
 
--- Look up any existing record for this key
+-- check the memory store for an existing record for request
 local rec = Get(key)
 
-print("using default rule")
+-- log the first observance in the memory store
 if rec == nil then
-  print("no existing record for:", key)
+	local ok, err = Observe(
+		request.kind,
+		request.source,
+		request.target,
+		{
+			note = "observed new contact",
+		}
+	)
 
-  -- Record a first observation
-  local ok, err = Observe(
-    request.kind,
-    request.source,
-    request.target,
-    {
-      note = "first sighting",
-      mode = "demo"
-    }
-  )
+	-- pass api errors back to the response manager
+	if not ok then
+		print("observe failed:", err)
+		return {
+			mode = "error",
+			actions = {
+				{ type = "log", args = { error = err, key = key, target = target }, },
+				{ type = "print", args = { error = err, key = key, target = target }, },
+			}
+		}
+	end
 
-  if not ok then
-    print("observe failed:", err)
-    return {
-      decision = "error",
-      reason = err
-    }
-  end
-
-  return {
-    decision = "recorded",
-    key = key
-  }
+	-- return the default dynamic spoof response with a log entry
+	return {
+		mode = "spoof",
+		response = {
+			rcode = "NOERROR",
+			rtype = type,
+			provisioning = "dynamic"
+		},
+		actions = {
+			{
+				type = "log",
+				args = {
+					rule = "default",
+					message = "first sighting",
+					key = key,
+					target = target,
+					type = type,
+				},
+			},
+			{
+				type = "print",
+				args = {
+					rule = "default",
+					message = "observed new contact",
+					key = key,
+					target = target,
+					type = type,
+				}
+			},
+		}
+	}
 else
-  print("existing record found for:", rec.key)
-  print("dns queries:", rec.dns_queries)
+	-- Add another observation using the same request context
+	local ok, err = Observe(
+		request.kind,
+		request.source,
+		request.target,
+		{
+			note = "repeat sighting",
+			previous_dns_queries = tostring(rec.dns_queries)
+		}
+	)
 
-  -- Add another observation using the same request context
-  local ok, err = Observe(
-    request.kind,
-    request.source,
-    request.target,
-    {
-      note = "repeat sighting",
-      previous_dns_queries = tostring(rec.dns_queries)
-    }
-  )
+	if not ok then
+		print("observe failed:", err)
+		return {
+			mode = "error",
+			actions = {
+				{ type = "log", args = { error = err, key = key, target = target }, },
+				{ type = "print", args = { error = err, key = key, target = target }, },
+			}
+		}
+	end
 
-  if not ok then
-    print("observe failed:", err)
-    return {
-      decision = "error",
-      reason = err
-    }
-  end
-
-  return {
-    decision = "seen_before",
-    key = rec.key,
-    dns_queries = rec.dns_queries
-  }
+	-- return the default dynamic spoof response with a log entry
+	return {
+		mode = "spoof",
+		response = {
+			rcode = "NOERROR",
+			rtype = type,
+			provisioning = "dynamic"
+		},
+		actions = {
+			{
+				type = "log",
+				args = {
+					rule = "default",
+					message = "repeat sighting",
+					times_seen = rec.dns_queries,
+					key = key,
+					target = target
+				},
+			},
+		}
+	}
 end

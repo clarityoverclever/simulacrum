@@ -17,6 +17,7 @@ package responder
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	lua "github.com/yuin/gopher-lua"
@@ -39,6 +40,11 @@ func (b *Bridge) InjectContext(req RequestContext) error {
 	b.vm.SetField(tbl, "source", lua.LString(req.Source))
 	b.vm.SetField(tbl, "target", lua.LString(req.Target))
 
+	// dns data collection flags
+	b.vm.SetField(tbl, "isTunnel", lua.LBool(req.Inputs.IsSuspectedTunnel))
+	b.vm.SetField(tbl, "entropy", lua.LNumber(req.Inputs.Entropy))
+	b.vm.SetField(tbl, "isAlive", lua.LBool(req.Inputs.IsAlive))
+
 	meta := b.vm.NewTable()
 	for k, v := range req.Meta {
 		b.vm.SetField(meta, k, lua.LString(v))
@@ -60,23 +66,79 @@ func (b *Bridge) Result() (Result, error) {
 		return Result{}, errors.New("script did not return a table")
 	}
 
-	out := Result{
+	result := Result{
 		Meta: map[string]string{},
 	}
 
-	if v := tbl.RawGetString("decision"); v != lua.LNil {
-		out.Decision = lua.LVAsString(v)
+	// parse response
+	mode := Mode(lua.LVAsString(tbl.RawGetString("mode")))
+	if !mode.Valid() {
+		return Result{}, fmt.Errorf("invalid mode: %q", lua.LVAsString(tbl.RawGetString("mode")))
+	}
+	result.Mode = mode
+
+	if result.Mode == "spoof" {
+		response := tbl.RawGetString("response")
+		if responseTbl, ok := response.(*lua.LTable); ok {
+			var rsp Response
+
+			if v := responseTbl.RawGetString("rcode"); v != lua.LNil {
+				code := ResponseCode(lua.LVAsString(v))
+				if !code.Valid() {
+					return Result{}, fmt.Errorf("invalid response code: %q", lua.LVAsString(v))
+				}
+				rsp.ResponseCode = code
+			} else {
+				return Result{}, errors.New("response.rcode is required")
+			}
+
+			if v := responseTbl.RawGetString("rtype"); v != lua.LNil {
+				rtype := ResponseType(lua.LVAsString(v))
+				if !rtype.Valid() {
+					return Result{}, fmt.Errorf("invalid response type: %q", lua.LVAsString(v))
+				}
+				rsp.RecordType = rtype
+			} else {
+				return Result{}, errors.New("response.rtype is required")
+			}
+
+			if v := responseTbl.RawGetString("value"); v != lua.LNil {
+				rsp.Value = lua.LVAsString(v)
+			}
+
+			if v := responseTbl.RawGetString("provisioning"); v != lua.LNil {
+				p := Provisioning(lua.LVAsString(v))
+				if !p.Valid() {
+					return Result{}, fmt.Errorf("invalid provisioning: %q", lua.LVAsString(v))
+				}
+				rsp.Provisioning = p
+			} else {
+				rsp.Provisioning = ProvisioningNone
+			}
+
+			result.Response = rsp
+		} else {
+			return Result{}, errors.New("script response must be a table")
+		}
 	}
 
+	// parse actions
+	if actionsTbl, ok := tbl.RawGetString("actions").(*lua.LTable); ok {
+		actions, err := parseActions(actionsTbl)
+		if err != nil {
+			return Result{}, err
+		}
+		result.Actions = actions
+	}
+
+	// parse meta
 	if metaTbl, ok := tbl.RawGetString("meta").(*lua.LTable); ok {
 		metaTbl.ForEach(func(k, v lua.LValue) {
-			key := lua.LVAsString(k)
-			val := lua.LVAsString(v)
-			out.Meta[key] = val
+			result.Meta[lua.LVAsString(k)] = lua.LVAsString(v)
 		})
 	}
 
-	return out, nil
+	return result, nil
 }
 
 func (b *Bridge) RegisterFunctions() {
@@ -180,4 +242,38 @@ func (b *Bridge) recordToTable(L *lua.LState, record Record) *lua.LTable {
 	L.SetField(tbl, "meta", meta)
 
 	return tbl
+}
+
+func parseActions(tbl *lua.LTable) ([]Action, error) {
+	var actions []Action
+
+	tbl.ForEach(func(_, v lua.LValue) {
+		actionTbl, ok := v.(*lua.LTable)
+		if !ok {
+			return
+		}
+
+		action := Action{
+			Args: map[string]string{},
+		}
+
+		if t := actionTbl.RawGetString("type"); t != lua.LNil {
+			if !ActionType(lua.LVAsString(t)).Valid() {
+				fmt.Printf("invalid action type: %q\n", lua.LVAsString(t))
+				return
+			}
+
+			action.Type = ActionType(lua.LVAsString(t))
+		}
+
+		if argsTbl, ok := actionTbl.RawGetString("args").(*lua.LTable); ok {
+			argsTbl.ForEach(func(k, v lua.LValue) {
+				action.Args[lua.LVAsString(k)] = lua.LVAsString(v)
+			})
+		}
+
+		actions = append(actions, action)
+	})
+
+	return actions, nil
 }

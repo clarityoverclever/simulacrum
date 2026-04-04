@@ -4,7 +4,6 @@ dns:
   analysis_ip: 192.168.117.128
   check_liveness: true
   upstream_dns: 9.9.9.9:53
-  spoof_network: true
   default_subnet: 10.0.1.0/8
   tunnel_detection_threshold: 4.0
 ntp:
@@ -23,6 +22,8 @@ common_web:
   max_body_kb: 64
 tls:
   cert_mode: dynamic
+  cert_file: ./certs/https.crt
+  key_file: ./certs/https.key
 ca:
   cert_file: ./certs/ca.crt
   key_file: ./certs/ca.key

@@ -55,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("starting Simulacrum version: 0.3.0")
+	fmt.Println("starting Simulacrum version: 0.4.0")
 
 	// capture and process terminating signals
 	quit := make(chan os.Signal, 1)
@@ -126,7 +126,6 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			AnalysisIP:               cfg.DNS.AnalysisIP,
 			CheckLiveness:            cfg.DNS.CheckLiveness,
 			UpstreamDNS:              cfg.DNS.UpstreamDNS,
-			SpoofNetwork:             cfg.DNS.SpoofNetwork,
 			DefaultSubnet:            cfg.DNS.DefaultSubnet,
 			TunnelDetectionThreshold: cfg.DNS.TunnelDetectionThreshold,
 			ResponseManager:          responseManager,
@@ -170,6 +169,9 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	listeners := make([]net.Listener, 0, len(services))
 
 	for _, service := range services {
+		// capture service shadow for use per goroutine
+		service := service
+
 		listener, err := socketManager.Create(service.Name())
 		if err != nil {
 			return err
@@ -178,9 +180,9 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		listeners = append(listeners, listener)
 
 		group.Go(func() error {
-			err = service.Run(listener)
-			if err != nil {
-				if errors.Is(err, net.ErrClosed) {
+			exeErr := service.Run(listener)
+			if exeErr != nil {
+				if errors.Is(exeErr, net.ErrClosed) {
 					return nil
 				}
 				return fmt.Errorf("service %s failed: %w", service.Name(), err)

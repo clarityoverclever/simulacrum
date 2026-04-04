@@ -39,13 +39,16 @@ type RequestContext struct {
 	Kind   Kind
 	Source string
 	Target string
+	Inputs Inputs
 	Meta   map[string]string
 	Now    time.Time
 }
 
-type Result struct {
-	Decision string
-	Meta     map[string]string
+type Inputs struct {
+	IsSuspectedTunnel bool
+	Entropy           float64
+	TestedUpstream    bool
+	IsAlive           bool
 }
 
 func NewManager(pool *Pool, store Store, resolver *Resolver) *Manager {
@@ -76,12 +79,12 @@ func (m *Manager) Handle(ctx context.Context, req RequestContext) (Result, error
 		return Result{}, fmt.Errorf("failed to run bridge: %w", err)
 	}
 
-	out, err := bridge.Result()
+	response, err := bridge.Result()
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to get result: %w", err)
 	}
 
-	return out, nil
+	return response, nil
 }
 
 func (m *Manager) newBridge(vm *lua.LState, ctx context.Context, req RequestContext, scriptPath string) *Bridge {

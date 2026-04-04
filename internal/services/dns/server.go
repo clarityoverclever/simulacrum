@@ -35,7 +35,8 @@ import (
 type Server struct {
 	bindAddress              string
 	analysisIP               net.IP
-	dnsServer                *dns.Server
+	dnsUdpServer             *dns.Server
+	dnsTcpServer             *dns.Server
 	checkLiveness            bool
 	upstreamDNS              string
 	SpoofNetwork             bool
@@ -62,19 +63,17 @@ type Config struct {
 }
 
 func New(cfg Config) (*Server, error) {
+	var err error
+
 	ip := net.ParseIP(cfg.AnalysisIP)
 	if ip == nil {
 		return nil, fmt.Errorf("invalid analysis IP address: %s", cfg.AnalysisIP)
 	}
 
 	var pool *ippool.Pool
-
-	if cfg.SpoofNetwork {
-		var err error
-		pool, err = ippool.New(cfg.DefaultSubnet)
-		if err != nil {
-			return nil, fmt.Errorf("invalid default subnet: %w", err)
-		}
+	pool, err = ippool.New(cfg.DefaultSubnet)
+	if err != nil {
+		return nil, fmt.Errorf("invalid default subnet: %w", err)
 	}
 
 	server := &Server{
@@ -82,7 +81,6 @@ func New(cfg Config) (*Server, error) {
 		analysisIP:               ip,
 		checkLiveness:            cfg.CheckLiveness,
 		upstreamDNS:              cfg.UpstreamDNS,
-		SpoofNetwork:             cfg.SpoofNetwork,
 		tunnelDetectionThreshold: cfg.TunnelDetectionThreshold,
 		responderManager:         cfg.ResponseManager,
 		ipPool:                   pool,
@@ -102,19 +100,42 @@ func New(cfg Config) (*Server, error) {
 func (s *Server) Start() error {
 	dns.HandleFunc(".", s.handleDNSRequest)
 
-	s.dnsServer = &dns.Server{Addr: s.bindAddress, Net: "udp"}
+	s.dnsUdpServer = &dns.Server{Addr: s.bindAddress, Net: "udp"}
+	s.dnsTcpServer = &dns.Server{Addr: s.bindAddress, Net: "tcp"}
 
-	fmt.Fprintf(os.Stdout, "[dns] listening on: %s\n", s.bindAddress)
+	errChan := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	if err := s.dnsServer.ListenAndServe(); err != nil {
-		return fmt.Errorf("failed to open listener: %w", err)
-	}
-	return nil
+	go func() {
+		defer wg.Done()
+		if err := s.dnsUdpServer.ListenAndServe(); err != nil {
+			errChan <- fmt.Errorf("failed to open UDP listener: %w", err)
+		}
+	}()
+	fmt.Println("[dns] listening on UDP", s.bindAddress)
+
+	go func() {
+		defer wg.Done()
+		if err := s.dnsTcpServer.ListenAndServe(); err != nil {
+			errChan <- fmt.Errorf("failed to open TCP listener: %w", err)
+		}
+	}()
+	fmt.Println("[dns] listening on TCP", s.bindAddress)
+
+	err := <-errChan
+
+	_ = s.dnsUdpServer.Shutdown()
+	_ = s.dnsTcpServer.Shutdown()
+
+	wg.Wait()
+
+	return err
 }
 
 // Stop stops the DNS server.
 func (s *Server) Stop() error {
-	if s.dnsServer != nil {
+	if s.dnsUdpServer != nil || s.dnsTcpServer != nil {
 		fmt.Println("[dns] stopping server")
 
 		// Clean up all DNAT rules
@@ -133,13 +154,23 @@ func (s *Server) Stop() error {
 			s.ipPool.Clear()
 		}
 
-		return s.dnsServer.Shutdown()
+		var err error
+		err = s.dnsUdpServer.Shutdown()
+		if err != nil {
+			return fmt.Errorf("failed to shutdown dns UDP server: %w", err)
+		}
+		err = s.dnsTcpServer.Shutdown()
+		if err != nil {
+			return fmt.Errorf("failed to shutdown dns TCP server: %w", err)
+		}
+
+		return nil
 	}
 	return nil
 }
 
-// resolveUpstream checks the live status of a domain by querying an upstream DNS server.
-func (s *Server) resolveUpstream(domain string, qtype uint16) (bool, net.IP) {
+// resolveUpstreamIP checks the live status of a domain by querying an upstream DNS server.
+func (s *Server) resolveUpstreamIP(domain string, qtype uint16) (bool, net.IP) {
 	if !s.checkLiveness {
 		return true, nil // always return success if upstream checking is disabled
 	}
@@ -264,7 +295,59 @@ func (s *Server) testEntropy(target string) (bool, float64) {
 	return false, entropy
 }
 
+func (s *Server) resolveProvisioning(mode responder.Provisioning, upstreamIP net.IP, domain string) (net.IP, error) {
+	switch mode {
+	case "static":
+		ip, err := s.ipPool.Allocate()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate static IP: %w", err)
+		}
+
+		if err = s.addDNAT(ip, domain); err != nil {
+			return nil, err
+		}
+
+		return ip, nil
+	case "dynamic":
+		if upstreamIP != nil {
+			if err := s.addDNAT(upstreamIP, domain); err != nil {
+				return nil, err
+			}
+			return upstreamIP, nil
+		}
+
+		logger.Warn("[dns] upstream IP not available for dynamic provisioning, falling back to static", "domain", domain)
+
+		ip, err := s.ipPool.Allocate()
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate fallback IP: %w", err)
+		}
+
+		if err = s.addDNAT(ip, domain); err != nil {
+			return nil, err
+		}
+
+		return ip, nil
+	case "none":
+		return nil, nil
+	default:
+		logger.Warn("[dns] unknown provisioning mode", "mode", mode)
+		return s.analysisIP, nil
+	}
+}
+
 func (s *Server) addDNAT(IP net.IP, domain string) error {
+	if IP == nil {
+		return fmt.Errorf("cannot add DNAT for nil IP")
+	}
+
+	// Check if the domain is already mapped
+	s.dnatLock.Lock()
+	if _, ok := s.dnatMap[domain]; ok {
+		return nil
+	}
+	s.dnatLock.Unlock()
+
 	if err := s.dnatManager.AddDNAT(IP.String()); err != nil {
 		return fmt.Errorf("failed to add DNAT: %w", err)
 	}
@@ -282,9 +365,14 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	msg := new(dns.Msg)
 	msg.SetReply(r)
 	msg.Authoritative = true
+	msg.Rcode = dns.RcodeSuccess
 
 	clientAddr := w.RemoteAddr().String()
 	clientIP, _, _ := net.SplitHostPort(clientAddr)
+
+	// set default response IP to analysis IP
+	var responseIP net.IP
+	responseIP = s.analysisIP
 
 	for _, question := range r.Question {
 		// extract domain with subdomain from question
@@ -296,105 +384,129 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			"client", clientAddr,
 		)
 
-		// attempt to detect tunneling by testing domain entropy
-		isTunnel, score := s.testEntropy(question.Name)
+		// start data collection for response manager
 
-		// todo move decisions to resolver
-		if isTunnel {
+		// attempt to detect tunneling by testing domain entropy
+		isSuspectedTunnel, score := s.testEntropy(question.Name)
+
+		if isSuspectedTunnel {
 			logger.Warn("[dns] possible tunneling detected", "domain", domain, "entropy", score)
-			msg.SetRcode(r, dns.RcodeSuccess)
-			continue
 		}
 
 		// check upstream DNS for domain if liveness check is enabled
-		isResolvedUpstream, upstreamIP := s.resolveUpstream(question.Name, question.Qtype)
+		isResolvedUpstream, upstreamIP := s.resolveUpstreamIP(question.Name, question.Qtype)
 
-		// todo move decisions to resolver
+		// return NXDOMAIN if upstream check fails
 		if !isResolvedUpstream {
-			// return NXDOMAIN if upstream check fails
-			msg.SetRcode(r, dns.RcodeNameError)
 			logger.Info("[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
+
+			msg.SetRcode(r, dns.RcodeNameError)
+			err = s.writeDNSResponse(w, msg)
 
 			continue
 		}
 
-		var responseIP net.IP
+		// send data to response manager
 
-		// todo extract spoof method as lspoof and rspoof
-		if s.SpoofNetwork && question.Qtype == dns.TypeA {
-			if upstreamIP != nil {
-				// spoof network if upstream IP is available
-				responseIP = upstreamIP
-			} else {
-				// use default subnet if upstream IP is not available
-				responseIP, err = s.ipPool.Allocate()
-				if err != nil {
-					logger.Error("[dns] failed to allocate IP from pool", "error", err)
-					responseIP = s.analysisIP
-				}
+		if s.responderManager != nil {
+			req := responder.RequestContext{
+				Key:    responder.Key(clientIP),
+				Kind:   responder.KindDNS,
+				Source: clientIP,
+				Target: domain,
+				Inputs: responder.Inputs{
+					IsSuspectedTunnel: isSuspectedTunnel,
+					Entropy:           score,
+					TestedUpstream:    s.checkLiveness,
+					IsAlive:           isResolvedUpstream,
+				},
+				Meta: map[string]string{"qtype": dns.TypeToString[question.Qtype]},
+				Now:  time.Now(),
 			}
 
-			// add DNAT rule
-			err = s.addDNAT(responseIP, domain)
-			if err != nil {
-				logger.Error("[dns] failed to add DNAT rule", "error", err)
+			var result responder.Result
+			if result, err = s.responderManager.Handle(context.Background(), req); err != nil {
+				fmt.Println("responder handle error", err)
+				logger.Warn("[dns] responder handle error", "error", err)
+			}
+
+			// process resolver results
+
+			// process internal resolver errors
+			if result.Mode == "error" {
+				err = s.actionHandler(result.Actions)
+				if err != nil {
+					logger.Warn("[dns] action handler error", "error", err)
+				}
+
+				msg.SetRcode(r, dns.RcodeServerFailure)
+				err = s.writeDNSResponse(w, msg)
+				if err != nil {
+					logger.Warn("[dns] failed to write response after error mode", "error", err)
+				}
+				continue
+			}
+
+			// process ignore mode before provisioning
+			if result.Mode == "ignore" {
+				err = s.actionHandler(result.Actions)
+				if err != nil {
+					logger.Warn("[dns] action handler error", "error", err)
+				}
+
+				msg.SetRcode(r, dns.RcodeNameError)
+				err = s.writeDNSResponse(w, msg)
+				if err != nil {
+					logger.Warn("[dns] failed to write response after ignore mode", "error", err)
+				}
+
+				continue
+			}
+
+			// provision an IP based on responder directive
+			responseIP, err = s.resolveProvisioning(result.Response.Provisioning, upstreamIP, domain)
+			if err != nil || responseIP == nil {
+				logger.Warn("[dns] provisioning resolution failed, fallback to analysisIP", "domain", domain, "error", err)
+				// fallback to analysisIP if provisioning fails
 				responseIP = s.analysisIP
 			}
-		} else {
-			// return analysis IP as fallback
-			responseIP = s.analysisIP
-		}
 
-		switch question.Qtype {
-		case dns.TypeA:
-			msg.Answer = append(msg.Answer, &dns.A{
-				Hdr: dns.RR_Header{
-					Name:   question.Name,
-					Rrtype: dns.TypeA,
-					Class:  dns.ClassINET,
-					Ttl:    1,
-				},
-				A: responseIP,
-			})
+			switch result.Mode {
+			case "spoof":
+				msg = s.handleSpoofRequest(result.Response, responseIP, question, msg)
 
-			logger.Info("[dns] response",
-				"domain", domain,
-				"returned_ip", responseIP.String(),
-				"spoofed", s.SpoofNetwork,
-			)
-
-			// run request through responder
-			if s.responderManager != nil {
-				var result responder.Result
-				logger.Info("[dns] sending responder request")
-				req := responder.RequestContext{
-					Key:    responder.Key(clientIP),
-					Kind:   responder.KindDNS,
-					Source: clientIP,
-					Target: domain,
-					Meta:   map[string]string{"qtype": dns.TypeToString[question.Qtype]},
-					Now:    time.Now(),
-				}
-				if result, err = s.responderManager.Handle(context.Background(), req); err != nil {
-					logger.Warn("[dns] responder handle error", "error", err)
-				}
-
-				fmt.Printf("[dns] responder result: %s\n", result.Decision)
+				logger.Info("[dns] response",
+					"domain", domain,
+					"returned_ip", responseIP.String(),
+				)
+			case "proxy":
+				msg, err = s.handleProxyRequest(w, r)
+			default:
+				logger.Warn("[dns] unknown mode", "mode", result.Mode)
+				continue
 			}
-		case dns.TypeAAAA:
-			logger.Info("[dns] returning NODATA for AAAA query", "domain", question.Name)
-			continue // sending NODATA for AAAA queries to attempt to force IPv4 fallback
-		case dns.TypeMX, dns.TypeNS, dns.TypeCNAME, dns.TypeTXT:
-			logger.Info("[dns] ignoring unsupported query", "type", dns.TypeToString[question.Qtype])
-			// TODO add capture support for these types
-			continue // sending NODATA for unsupported types
-		default:
-			logger.Info("[dns] unknown query type", "type", question.Qtype)
-			msg.SetRcode(r, dns.RcodeNameError)
+
+			// handle actions
+			err = s.actionHandler(result.Actions)
+			if err != nil {
+				logger.Warn("[dns] action handler error", "error", err)
+			}
+		}
+
+		err = s.writeDNSResponse(w, msg)
+		if err != nil {
+			logger.Warn("[dns] failed to write response", "error", err)
 		}
 	}
+}
 
-	if err = w.WriteMsg(msg); err != nil {
-		fmt.Fprintf(os.Stderr, "[dns] failed to write response: %v\n", err)
+// writeDNSResponse writes a supplied DNS response to the client
+func (s *Server) writeDNSResponse(w dns.ResponseWriter, msg *dns.Msg) error {
+	if err := w.WriteMsg(msg); err != nil {
+		_, err = fmt.Fprintf(os.Stderr, "dns write failure: %v\n", err)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

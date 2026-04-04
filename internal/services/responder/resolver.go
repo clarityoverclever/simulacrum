@@ -31,49 +31,66 @@ func NewResolver(rulesPath string) (*Resolver, error) {
 		RulesPath: rulesPath,
 		Rules:     make(map[string]string),
 	}
-	err := resolver.LoadScripts()
-	if err != nil {
+
+	if err := resolver.LoadScripts(); err != nil {
 		return nil, fmt.Errorf("resolver failed to load scripts: %w", err)
 	}
-
 	return &resolver, nil
 }
 
 func (r *Resolver) LoadScripts() error {
-	scripts, err := os.ReadDir(r.RulesPath)
+	entries, err := os.ReadDir(r.RulesPath)
 	if err != nil {
 		return fmt.Errorf("failed to read scripts directory: %w", err)
 	}
 
-	for _, script := range scripts {
-		if script.IsDir() {
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if filepath.Ext(entry.Name()) != ".lua" {
 			continue
 		}
 
-		if filepath.Ext(script.Name()) != ".lua" {
-			continue
-		}
+		name := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+		name = strings.ToLower(strings.TrimSpace(name))
 
-		// normalize lookup key
-		name := filepath.Base(script.Name())
-		key := strings.TrimSuffix(strings.TrimSpace(name), filepath.Ext(name))
-		key = strings.ToLower(key)
-
-		fullPath := filepath.Join(r.RulesPath, script.Name())
-		r.Rules[key] = fullPath
+		r.Rules[name] = filepath.Join(r.RulesPath, entry.Name())
 	}
 
 	return nil
 }
 
 func (r *Resolver) GetRule(name string) (string, bool) {
-	// normalize lookup key
-	key := strings.ToLower(name)
+	name = normalizeRuleName(name)
 
-	rule, ok := r.Rules[key]
-	if !ok {
-		rule, ok = r.Rules["default"]
+	for _, candidate := range ruleCandidates(name) {
+		if rule, ok := r.Rules[candidate]; ok {
+			return rule, true
+		}
 	}
 
-	return rule, ok
+	return "", false
+}
+
+func normalizeRuleName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = strings.TrimSuffix(name, ".")
+	return name
+}
+
+func ruleCandidates(name string) []string {
+	if name == "" {
+		return []string{"default"}
+	}
+
+	parts := strings.Split(name, ".")
+	candidates := make([]string, 0, len(parts)+1)
+
+	for i := 0; i < len(parts); i++ {
+		candidates = append(candidates, strings.Join(parts[i:], "."))
+	}
+
+	candidates = append(candidates, "default")
+	return candidates
 }

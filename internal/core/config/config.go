@@ -32,7 +32,6 @@ type DnsConfig struct {
 	AnalysisIP               string  `yaml:"analysis_ip"`
 	CheckLiveness            bool    `yaml:"check_liveness"`
 	UpstreamDNS              string  `yaml:"upstream_dns"`
-	SpoofNetwork             bool    `yaml:"spoof_network"`
 	DefaultSubnet            string  `yaml:"default_subnet"`
 	TunnelDetectionThreshold float64 `yaml:"tunnel_detection_threshold"`
 }
