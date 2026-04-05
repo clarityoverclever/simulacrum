@@ -236,3 +236,4 @@ mv ./agent.exe ./internal/services/web/static/
 - [ ] Bidirectional communication support for canary files
 - [ ] Enhanced canary file capabilities for environmental analysis
 - [ ] Persistent memory store with snapshotting
+- [ ] expand data plane integration
