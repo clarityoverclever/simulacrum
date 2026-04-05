@@ -11,8 +11,8 @@ Simulacrum aims to provide deterministic network behavior for analysis and testi
 ### This project is under active development, and the documentation is incomplete. Feedback is welcome and appreciated.
 
 ### Objectives
-For years InetSim has been the backbone of network simulations, but as malware has evolved, the tool is starting to show its age.
-Simulacrum aims to bridge the gap by providing a modern network simulator designed specifically for the modern threat landscape.
+Tools like INetSim laid the groundwork for network simulation in malware analysis and have been the backbone of network simulation for years; however, as malware has evolved, the tool is starting to show its age.
+Simulacrum aims to bridge the gap by providing a modern network simulator with an extensible, forward-looking design built for today’s threat landscape.
 
 ## Features
 - supplies configurable servers on a data plane (DNS, HTTP(S), NTP)
@@ -23,16 +23,17 @@ Simulacrum aims to bridge the gap by providing a modern network simulator design
 
 ### DNS
 - Serves DNS on configurable port
-- Rewrites queries to a static IP or upstream DNS server with local DNAT/
+- Dynamic and scriptable DNS response construction
+- Custom response modes to allow static and dynamic spoofing with local DNAT, or transparent proxy behavior
 - Optional "liveness" checks against upstream DNS server
 - DNS spoofing using a configurable CIDR subnet
-- DNS tunneling detection with configurable threshold
+- DNS tunneling detection with a configurable threshold
 
 ### HTTP(S)
-- Serves HTTP with file service on configurable port
+- Serves HTTP with file service on  configurable port
 - Capture POST data into Base64 files for later analysis
 - Optional logging of HTTP request headers
-- Optional spoofed HTTP request payload delivery (ps1, exe)
+- Optional spoofed HTTP request payload delivery with a canary file (ps1, exe)
 
 ### TLS with Dynamic Certificate Management
 - Manages TLS certificates for HTTPS
@@ -60,11 +61,7 @@ go build ./cmd/simctl/simctl.go
 
 ## How It Works
 1. simulacrum listens on a specified IP and port for DNS queries.
-2. Each query is intercepted and, depending on the configuration, rewritten with:
-    - A static `analysis_ip`
-    - The IP of the upstream DNS server with local DNAT redirection
-    - A generated IP from `default_subnet` when spoofing is enabled.
-3. Optional liveness checks validate upstream DNS availability.
+2. Each query is intercepted and passed to a virtual response environment where the analyst defines the response behavior.
 4. Logs provide visibility into query flow and behavior.
 
 ---
@@ -88,14 +85,8 @@ file: ./config/config.yaml
 - **upstream_dns:** `IP:PORT`  
   Required when `check_liveness` is enabled.
 
-- **spoof_network:** `true | false`  
-  Enables spoofed DNS responses for the default subnet.
-
 - **default_subnet:** `CIDR`  
   Subnet used to generate spoofed IPs.
-
-- **enable_tunnel_detection:** `true | false`  
-  Enables detection of tunneling traffic.
 
 - **tunnel_detection_threshold:** `float`  
   Threshold for tunneling detection. 4.0 is recommended
@@ -163,6 +154,14 @@ file: ./config/config.yaml
 - **leaf_validity_days:** `int`
   Validity period for the leaf certificate in days.
 
+### responder
+- **enabled:** `true | false`  
+  Controls whether the responder service starts at launch.
+- **rules_path:** `PATH`  
+  Path to responder rules directory.
+- **pool_size:** `int`  
+  Maximum number of concurrent virtual machine connections.
+
 ### Example
 ```yaml
 dns:
@@ -171,9 +170,7 @@ dns:
   analysis_ip: 192.168.117.128
   check_liveness: true
   upstream_dns: 9.9.9.9:53
-  spoof_network: true
   default_subnet: 10.0.1.0/8
-  enable_tunnel_detection: true
   tunnel_detection_threshold: 4.0
 ntp:
   enabled: true
@@ -200,12 +197,16 @@ ca:
   organization: "Simulacrum"
   root_validity_days: 3650
   leaf_validity_days: 7
+responder:
+  enabled: true
+  rules_path: ./rules
+  pool_size: 4
 ```
 
 ### Usage
 1. Edit the configuration file with your desired settings.
 2. Ensure the listening port (typically 53) is available.
-3. Start simulacrum (root/sudo required for privileged ports).
+3. Start simulacrum (root/sudo required for privileged ports and DNAT).
 
 ### Notes
 #### Enable IP forwarding on host for spoofing
@@ -223,7 +224,7 @@ sudo iptables -t nat -L PREROUTING -n -v
 
 #### Build exe agent
 ```bash
-GOOS=windows GOARCH=amd64 go build -o agent.exe ./cmd/agent/agent.go
+GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o agent.exe ./cmd/agent/agent.go
 
-mv ./agent.exe ./internal/services/http/static/
+mv ./agent.exe ./internal/services/web/static/
 ```
