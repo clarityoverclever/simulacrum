@@ -228,3 +228,11 @@ GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o agent.exe ./cmd/agent/age
 
 mv ./agent.exe ./internal/services/web/static/
 ```
+
+### What's Next
+- [ ] SMTP/s sinkhole, credential, and payload collection
+- [ ] DNS over HTTPS support
+- [ ] Scriptable HTTP/s responder support
+- [ ] Bidirectional communication support for canary files
+- [ ] Enhanced canary file capabilities for environmental analysis
+- [ ] Persistent memory store with snapshotting
