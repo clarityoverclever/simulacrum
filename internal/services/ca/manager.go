@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -55,6 +56,13 @@ func NewManager(cfg Config) (*Manager, error) {
 
 // loadOrCreateRootCert loads or creates the CA root certificate and key.
 func (m *Manager) loadOrCreateRootCert() error {
+	certDir := filepath.Dir(m.cfg.CertFile)
+
+	err := EnsureCertDir(certDir)
+	if err != nil {
+		return fmt.Errorf("failed to create cert directory: %w", err)
+	}
+
 	_, certErr := os.Stat(m.cfg.CertFile)
 	_, keyErr := os.Stat(m.cfg.KeyFile)
 
@@ -246,7 +254,7 @@ func randomSerialNumber() (*big.Int, error) {
 
 // writeCertPEM writes a certificate to disk in PEM format.
 func writeCertPEM(path string, der []byte) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open cert file: %w", err)
 	}
@@ -266,7 +274,7 @@ func writeCertPEM(path string, der []byte) error {
 
 // writeKeyPEM writes a private key to disk in PEM format.
 func writeKeyPEM(path string, key *rsa.PrivateKey) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open key file: %w", err)
 	}
@@ -281,5 +289,14 @@ func writeKeyPEM(path string, key *rsa.PrivateKey) error {
 		return fmt.Errorf("failed to write key PEM: %w", err)
 	}
 
+	return nil
+}
+
+// EnsureCertDir ensures that the certificate directory exists
+func EnsureCertDir(path string) error {
+	err := os.MkdirAll(path, 0700)
+	if err != nil {
+		return fmt.Errorf("could not create cert directory: %w", err)
+	}
 	return nil
 }

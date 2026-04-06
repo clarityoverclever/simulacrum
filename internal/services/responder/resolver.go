@@ -15,11 +15,15 @@
 package responder
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+//go:embed static/default.lua
+var defaultRules []byte
 
 type Resolver struct {
 	RulesPath string
@@ -32,6 +36,10 @@ func NewResolver(rulesPath string) (*Resolver, error) {
 		Rules:     make(map[string]string),
 	}
 
+	if err := EnsureRulesDir(rulesPath); err != nil {
+		return nil, fmt.Errorf("resolver failed to ensure rules directory: %w", err)
+	}
+
 	if err := resolver.LoadScripts(); err != nil {
 		return nil, fmt.Errorf("resolver failed to load scripts: %w", err)
 	}
@@ -39,6 +47,13 @@ func NewResolver(rulesPath string) (*Resolver, error) {
 }
 
 func (r *Resolver) LoadScripts() error {
+	if _, err := os.Stat(r.RulesPath); os.IsNotExist(err) {
+		err = CreateDefaultRules(r.RulesPath)
+		if err != nil {
+			fmt.Errorf("failed to create default rules: %w", err)
+		}
+	}
+
 	entries, err := os.ReadDir(r.RulesPath)
 	if err != nil {
 		return fmt.Errorf("failed to read scripts directory: %w", err)
@@ -93,4 +108,27 @@ func ruleCandidates(name string) []string {
 
 	candidates = append(candidates, "default")
 	return candidates
+}
+
+// EnsureRulesDir ensures that the rules directory exists
+func EnsureRulesDir(path string) error {
+	err := os.MkdirAll(path, 0700)
+	if err != nil {
+		return fmt.Errorf("could not create rules directory: %w", err)
+	}
+	return nil
+}
+
+// CreateDefaultRules creates a default.lua file from the embedded default
+func CreateDefaultRules(path string) error {
+	err := os.MkdirAll(filepath.Dir(path), 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create rules directory: %w", err)
+	}
+
+	err = os.WriteFile(path, defaultRules, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write default.lua: %w", err)
+	}
+	return nil
 }
