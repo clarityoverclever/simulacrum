@@ -195,9 +195,16 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 	group.Go(func() error {
 		<-quit
 		fmt.Printf("\nterminating services")
+
+		for _, service := range services {
+			if err = service.Stop(); err != nil {
+				fmt.Printf("[%s] service stop error: %v\n", service.Name(), err)
+			}
+		}
 		for _, listener := range listeners {
 			_ = listener.Close()
 		}
+
 		return nil
 	})
 

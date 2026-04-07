@@ -31,6 +31,15 @@ type Service struct {
 	config Config
 }
 
+func (s *Service) Stop() error {
+	err := s.stop()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func Init(cfg Config) *Service {
 	return &Service{
 		state:  core.StatusStopped,

@@ -54,6 +54,7 @@ type ControlResponse struct {
 type Service interface {
 	Name() string
 	Run(listener net.Listener) error
+	Stop() error
 }
 
 func SendControlMessage(message ControlMessage) error {
