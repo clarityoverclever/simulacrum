@@ -114,7 +114,7 @@ func EnsureDefaultRules(path string) error {
 
 	_, err = os.Stat(ruleFile)
 	if os.IsNotExist(err) {
-		err = os.WriteFile(ruleFile, defaultRules, 0644)
+		err = os.WriteFile(ruleFile, defaultRules, 0666)
 		if err != nil {
 			return fmt.Errorf("failed to write default.lua: %w", err)
 		}

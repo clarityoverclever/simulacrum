@@ -55,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("starting Simulacrum version: 0.4.0")
+	fmt.Println("starting Simulacrum version: 0.4.1")
 
 	// capture and process terminating signals
 	quit := make(chan os.Signal, 1)

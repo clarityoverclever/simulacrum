@@ -415,7 +415,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 
 		if s.responderManager != nil {
 			req := responder.RequestContext{
-				Key:    responder.Key(clientIP),
+				Key:    responder.Key(domain),
 				Kind:   responder.KindDNS,
 				Source: clientIP,
 				Target: domain,
