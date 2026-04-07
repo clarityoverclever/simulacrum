@@ -111,6 +111,8 @@ func (s *Server) Start() error {
 		defer wg.Done()
 		if err := s.dnsUdpServer.ListenAndServe(); err != nil {
 			errChan <- fmt.Errorf("failed to open UDP listener: %w", err)
+		} else {
+			errChan <- nil
 		}
 	}()
 	fmt.Println("[dns] listening on UDP", s.bindAddress)
@@ -119,6 +121,8 @@ func (s *Server) Start() error {
 		defer wg.Done()
 		if err := s.dnsTcpServer.ListenAndServe(); err != nil {
 			errChan <- fmt.Errorf("failed to open TCP listener: %w", err)
+		} else {
+			errChan <- nil
 		}
 	}()
 	fmt.Println("[dns] listening on TCP", s.bindAddress)
@@ -344,6 +348,7 @@ func (s *Server) addDNAT(IP net.IP, domain string) error {
 	// Check if the domain is already mapped
 	s.dnatLock.Lock()
 	if _, ok := s.dnatMap[domain]; ok {
+		s.dnatLock.Unlock()
 		return nil
 	}
 	s.dnatLock.Unlock()
