@@ -105,19 +105,18 @@ func ruleCandidates(name string) []string {
 
 // EnsureDefaultRules creates a default.lua file from the embedded default
 func EnsureDefaultRules(path string) error {
-	err := os.MkdirAll(path, 0755)
-	if err != nil {
+	if err := os.MkdirAll(path, 0755); err != nil {
 		return fmt.Errorf("failed to create rules directory: %w", err)
 	}
 
 	ruleFile := filepath.Join(path, "default.lua")
 
-	_, err = os.Stat(ruleFile)
-	if os.IsNotExist(err) {
-		err = os.WriteFile(ruleFile, defaultRules, 0666)
-		if err != nil {
+	if _, err := os.Stat(ruleFile); os.IsNotExist(err) {
+		if err = os.WriteFile(ruleFile, defaultRules, 0666); err != nil {
 			return fmt.Errorf("failed to write default.lua: %w", err)
 		}
+	} else if err != nil {
+		return fmt.Errorf("failed to stat default.lua: %w", err)
 	}
 
 	return nil

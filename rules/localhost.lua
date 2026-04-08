@@ -12,7 +12,7 @@ if target == "ignore.localhost" then
 		{
 			type = "print",
 			args = {
-				message = "intentionally ignoing this record",
+				message = "intentionally ignoring this record",
 				key = key,
 				target = target
 			}

@@ -94,11 +94,9 @@ func LoadOrCreate(path string) (*Config, error) {
 	var err error
 	cfg := &Config{}
 
-	if _, err = os.Stat(path); os.IsNotExist(err) {
-		err = CreateConfig(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create default config: %w", err)
-		}
+	err = ensureConfig(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default config: %w", err)
 	}
 
 	data, err := os.ReadFile(path)
@@ -115,15 +113,18 @@ func LoadOrCreate(path string) (*Config, error) {
 }
 
 // CreateConfig creates a new config file from the embedded default
-func CreateConfig(path string) error {
-	err := os.MkdirAll(filepath.Dir(path), 0755)
-	if err != nil {
+func ensureConfig(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	err = os.WriteFile(path, defaultConfig, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write default config: %w", err)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err = os.WriteFile(path, defaultConfig, 0644); err != nil {
+			return fmt.Errorf("failed to write default config: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to stat default config: %w", err)
 	}
+
 	return nil
 }

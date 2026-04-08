@@ -58,8 +58,7 @@ func NewManager(cfg Config) (*Manager, error) {
 func (m *Manager) loadOrCreateRootCert() error {
 	certDir := filepath.Dir(m.cfg.CertFile)
 
-	err := EnsureCertDir(certDir)
-	if err != nil {
+	if err := os.MkdirAll(certDir, 0700); err != nil {
 		return fmt.Errorf("failed to create cert directory: %w", err)
 	}
 
@@ -289,14 +288,5 @@ func writeKeyPEM(path string, key *rsa.PrivateKey) error {
 		return fmt.Errorf("failed to write key PEM: %w", err)
 	}
 
-	return nil
-}
-
-// EnsureCertDir ensures that the certificate directory exists
-func EnsureCertDir(path string) error {
-	err := os.MkdirAll(path, 0700)
-	if err != nil {
-		return fmt.Errorf("could not create cert directory: %w", err)
-	}
 	return nil
 }

@@ -234,9 +234,9 @@ func (h *Handler) CapturePostBody(file string, data []byte) error {
 		return fmt.Errorf("[%s] failed to stat capture file: %w", h.cfg.ServiceName, err)
 	}
 
-	err = os.WriteFile(file, data, 0644)
-	if err != nil {
+	if err = os.WriteFile(file, data, 0644); err != nil {
 		return fmt.Errorf("[%s] failed to write capture to file: %w", h.cfg.ServiceName, err)
 	}
+
 	return nil
 }
