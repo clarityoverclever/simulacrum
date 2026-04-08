@@ -30,7 +30,7 @@ type DnsConfig struct {
 	Enabled                  bool    `yaml:"enabled"`
 	BindAddress              string  `yaml:"bind_addr"`
 	AnalysisIP               string  `yaml:"analysis_ip"`
-	CheckLiveness            bool    `yaml:"check_liveness"`
+	VerifyUpstream           bool    `yaml:"verify_upstream"`
 	UpstreamDNS              string  `yaml:"upstream_dns"`
 	DefaultSubnet            string  `yaml:"default_subnet"`
 	TunnelDetectionThreshold float64 `yaml:"tunnel_detection_threshold"`

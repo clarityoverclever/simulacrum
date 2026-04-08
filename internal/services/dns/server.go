@@ -37,7 +37,7 @@ type Server struct {
 	analysisIP               net.IP
 	dnsUdpServer             *dns.Server
 	dnsTcpServer             *dns.Server
-	checkLiveness            bool
+	VerifyUpstream           bool
 	upstreamDNS              string
 	SpoofNetwork             bool
 	tunnelDetection          bool
@@ -53,7 +53,7 @@ type Config struct {
 	Enabled                  bool
 	BindAddress              string
 	AnalysisIP               string
-	CheckLiveness            bool
+	VerifyUpstream           bool
 	UpstreamDNS              string
 	SpoofNetwork             bool
 	DefaultSubnet            string
@@ -79,7 +79,7 @@ func New(cfg Config) (*Server, error) {
 	server := &Server{
 		bindAddress:              cfg.BindAddress,
 		analysisIP:               ip,
-		checkLiveness:            cfg.CheckLiveness,
+		VerifyUpstream:           cfg.VerifyUpstream,
 		upstreamDNS:              cfg.UpstreamDNS,
 		tunnelDetectionThreshold: cfg.TunnelDetectionThreshold,
 		responderManager:         cfg.ResponseManager,
@@ -89,7 +89,7 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	// validate upstream DNS if liveness check is enabled
-	if server.checkLiveness && server.upstreamDNS == "" {
+	if server.VerifyUpstream && server.upstreamDNS == "" {
 		return nil, fmt.Errorf("upstream DNS required for liveness check")
 	}
 
@@ -175,7 +175,7 @@ func (s *Server) Stop() error {
 
 // resolveUpstreamIP checks the live status of a domain by querying an upstream DNS server.
 func (s *Server) resolveUpstreamIP(domain string, qtype uint16) (bool, net.IP) {
-	if !s.checkLiveness {
+	if !s.VerifyUpstream {
 		return true, nil // always return success if upstream checking is disabled
 	}
 
@@ -238,7 +238,7 @@ func (s *Server) resolveUpstreamIP(domain string, qtype uint16) (bool, net.IP) {
 
 // testIsAliveUpstream checks the live status of a domain with an SOA query.
 func (s *Server) testIsAliveUpstream(domain string) bool {
-	if !s.checkLiveness {
+	if !s.VerifyUpstream {
 		return true // always return success if upstream checking is disabled
 	}
 
@@ -422,7 +422,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 				Inputs: responder.Inputs{
 					IsSuspectedTunnel: isSuspectedTunnel,
 					Entropy:           score,
-					TestedUpstream:    s.checkLiveness,
+					TestedUpstream:    s.VerifyUpstream,
 					IsAlive:           isResolvedUpstream,
 				},
 				Meta: map[string]string{"qtype": dns.TypeToString[question.Qtype]},

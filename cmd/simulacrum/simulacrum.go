@@ -122,7 +122,7 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 			Enabled:                  cfg.DNS.Enabled,
 			BindAddress:              cfg.DNS.BindAddress,
 			AnalysisIP:               cfg.DNS.AnalysisIP,
-			CheckLiveness:            cfg.DNS.CheckLiveness,
+			VerifyUpstream:           cfg.DNS.VerifyUpstream,
 			UpstreamDNS:              cfg.DNS.UpstreamDNS,
 			DefaultSubnet:            cfg.DNS.DefaultSubnet,
 			TunnelDetectionThreshold: cfg.DNS.TunnelDetectionThreshold,
