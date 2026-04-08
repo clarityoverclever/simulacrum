@@ -32,6 +32,5 @@ ca:
   root_validity_days: 3650
   leaf_validity_days: 7
 responder:
-  enabled: true
   rules_path: ./rules
   pool_size: 4

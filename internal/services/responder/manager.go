@@ -29,7 +29,6 @@ type Manager struct {
 }
 
 type Config struct {
-	Enabled   bool
 	PoolSize  int
 	RulesPath string
 }

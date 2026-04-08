@@ -105,16 +105,14 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 
 	// initialize response manager
 	var responseManager *responder.Manager
-	if cfg.Responder.Enabled {
-		pool := responder.NewPool(cfg.Responder.PoolSize)
-		store := responder.NewMemoryStore()
-		resolver, err := responder.NewResolver(cfg.Responder.RulesPath)
-		if err != nil {
-			return fmt.Errorf("failed to initialize responder service: %w", err)
-		}
-
-		responseManager = responder.NewManager(pool, store, resolver)
+	pool := responder.NewPool(cfg.Responder.PoolSize)
+	store := responder.NewMemoryStore()
+	resolver, err := responder.NewResolver(cfg.Responder.RulesPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize responder service: %w", err)
 	}
+
+	responseManager = responder.NewManager(pool, store, resolver)
 
 	// initialize listener services: dns, http, https, ntp
 	fmt.Println("[core] starting listeners")

@@ -74,7 +74,6 @@ type CAConfig struct {
 }
 
 type ResponderConfig struct {
-	Enabled   bool   `yaml:"enabled"`
 	RulesPath string `yaml:"rules_path"`
 	PoolSize  int    `yaml:"pool_size"`
 }
