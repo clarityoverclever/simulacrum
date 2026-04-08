@@ -92,7 +92,7 @@ func (h *Handler) HandleGet(w http.ResponseWriter, r *http.Request) {
 
 // HandlePost handles incoming POST requests and captures the body as a Base64 encoded string into a file.
 func (h *Handler) HandlePost(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("[%s] POST received\n", h.cfg.ServiceName)
+	fmt.Printf("[%s] POST sent to %s\n", h.cfg.ServiceName, r.URL.Path)
 
 	var capture []byte
 	var truncated bool

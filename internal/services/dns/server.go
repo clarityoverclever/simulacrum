@@ -173,25 +173,60 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-// resolveUpstreamIP checks the live status of a domain by querying an upstream DNS server.
-func (s *Server) resolveUpstreamIP(domain string, qtype uint16) (bool, net.IP) {
+// verifyUpstreamDNS checks the live status of a domain by querying an upstream DNS server.
+func (s *Server) verifyUpstreamDNS(domain string, qtype uint16, isSuspectedTunnel bool) (bool, net.IP) {
 	if !s.VerifyUpstream {
 		return true, nil // always return success if upstream checking is disabled
 	}
 
-	// extract apex domain for the upstream query to counter dns tunneling
-	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
-	apex, err := publicsuffix.EffectiveTLDPlusOne(domain)
-	if err != nil {
-		logger.Warn("[dns] failed to resolve apex domain", "domain", domain, "error", err)
-		return true, nil // fail open if apex domain isolation fails
+	var err error
+	target := domain
+
+	if isSuspectedTunnel {
+		// extract apex domain for the upstream query to counter dns tunneling
+		domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
+		target, err = publicsuffix.EffectiveTLDPlusOne(domain)
+		if err != nil {
+			logger.Warn("[dns] failed to resolve apex domain", "domain", domain, "error", err)
+			return true, nil // fail open if apex domain isolation fails
+		}
 	}
 
 	c := new(dns.Client)
 	c.Timeout = 2 * time.Second
 
+	visited := make(map[string]struct{})
+
+	return s.resolveUpstreamIP(c, target, qtype, 0, visited)
+}
+
+func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, depth int, visited map[string]struct{}) (bool, net.IP) {
+	const maxCNAMEHops = 5
+
+	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
+	if domain == "" {
+		return true, nil
+	}
+
+	if _, seen := visited[domain]; seen {
+		logger.Warn("[dns] CNAME loop detected",
+			"domain", domain,
+			"type", dns.TypeToString[qtype],
+		)
+		return true, nil
+	}
+	visited[domain] = struct{}{}
+
+	if depth > maxCNAMEHops {
+		logger.Warn("[dns] max CNAME hop limit reached",
+			"domain", domain,
+			"type", dns.TypeToString[qtype],
+		)
+		return true, nil
+	}
+
 	m := new(dns.Msg)
-	m.SetQuestion(dns.Fqdn(apex), qtype)
+	m.SetQuestion(dns.Fqdn(domain), qtype)
 	m.RecursionDesired = true
 
 	r, _, err := c.Exchange(m, s.upstreamDNS)
@@ -206,27 +241,49 @@ func (s *Server) resolveUpstreamIP(domain string, qtype uint16) (bool, net.IP) {
 	// check response code
 	switch r.Rcode {
 	case dns.RcodeSuccess:
-		var upstreamIP net.IP
-		if qtype == dns.TypeA {
-			for _, ans := range r.Answer {
-				if a, ok := ans.(*dns.A); ok {
-					upstreamIP = a.A
-					break
-				}
+		if qtype != dns.TypeA {
+			logger.Info("[dns] upstream DNS check succeeded",
+				"domain", domain,
+				"type", dns.TypeToString[qtype],
+			)
+			return true, nil
+		}
+
+		// look for a direct A record.
+		for _, ans := range r.Answer {
+			if a, ok := ans.(*dns.A); ok && a.A != nil {
+				logger.Info("[dns] upstream DNS check succeeded",
+					"domain", domain,
+					"type", dns.TypeToString[qtype],
+					"upstream_ip", a.A,
+				)
+				return true, a.A
 			}
 		}
-		logger.Info("[dns] upstream DNS check succeeded",
+
+		// follow CNAME chain if A record is not found
+		// recursion depth 5
+		for _, ans := range r.Answer {
+			if cname, ok := ans.(*dns.CNAME); ok && cname.Target != "" {
+				logger.Info("[dns] following CNAME chain", "domain", domain, "target", cname.Target, "type", dns.TypeToString[qtype])
+				nextDomain := strings.TrimSpace(strings.TrimSuffix(cname.Target, "."))
+				return s.resolveUpstreamIP(c, nextDomain, dns.TypeA, depth+1, visited)
+			}
+		}
+
+		logger.Info("[dns] upstream DNS check succeeded but no A record was returned",
 			"domain", domain,
 			"type", dns.TypeToString[qtype],
-			"upstream_ip", upstreamIP,
 		)
-		return true, upstreamIP
+		return true, nil
+
 	case dns.RcodeNameError: // NXDOMAIN
 		logger.Info("[dns] upstream DNS check failed",
 			"domain", domain,
 			"error", "NXDOMAIN",
 		)
 		return false, nil
+
 	default:
 		logger.Warn("[dns] upstream DNS check failed",
 			"domain", domain,
@@ -399,7 +456,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		}
 
 		// check upstream DNS for domain if liveness check is enabled
-		isResolvedUpstream, upstreamIP := s.resolveUpstreamIP(question.Name, question.Qtype)
+		isResolvedUpstream, upstreamIP := s.verifyUpstreamDNS(question.Name, question.Qtype, isSuspectedTunnel)
 
 		// return NXDOMAIN if upstream check fails
 		if !isResolvedUpstream {

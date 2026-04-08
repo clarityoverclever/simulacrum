@@ -44,5 +44,12 @@ func (s *Server) handleProxyRequest(w dns.ResponseWriter, r *dns.Msg) (*dns.Msg,
 		return nil, err
 	}
 
+	err = captureProxyResponse(response)
+
 	return response, nil
+}
+
+func captureProxyResponse(response *dns.Msg) error {
+	// todo implement response capture logic
+	return nil
 }
