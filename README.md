@@ -25,7 +25,7 @@ Simulacrum aims to bridge the gap by providing a modern network simulator with a
 - Serves DNS on configurable port
 - Dynamic and scriptable DNS response construction
 - Custom response modes to allow static and dynamic spoofing with local DNAT, or transparent proxy behavior
-- Optional "liveness" checks against upstream DNS server
+- Optional upstream checks against upstream DNS server
 - DNS spoofing using a configurable CIDR subnet
 - DNS tunneling detection with a configurable threshold
 
@@ -62,7 +62,16 @@ go build ./cmd/simctl/simctl.go
 ## How It Works
 1. simulacrum listens on a specified IP and port for DNS queries.
 2. Each query is intercepted and passed to a virtual response environment where the analyst defines the response behavior.
-4. Logs provide visibility into query flow and behavior.
+3. Logs provide visibility into query flow and behavior.
+
+## Installation
+1. git clone https://github.com/simulacrum/simulacrum.git
+2. cd simulacrum
+3. go build ./cmd/simulacrum/simulacrum.go
+4. sudo ./simulacrum
+
+the first time you run simulacrum, default config, rules, and certs will be generated
+5. Add ./certs/ca.crt to the trusted root certificates on the target system.
 
 ---
 
@@ -79,7 +88,7 @@ file: ./config/config.yaml
 - **analysis_ip:** `IP`  
   The IP returned for all DNS queries when spoofing is disabled.
 
-- **check_liveness:** `true | false`  
+- **verify_upstream:** `true | false`  
   Enables upstream DNS health checks.
 
 - **upstream_dns:** `IP:PORT`  
@@ -155,8 +164,6 @@ file: ./config/config.yaml
   Validity period for the leaf certificate in days.
 
 ### responder
-- **enabled:** `true | false`  
-  Controls whether the responder service starts at launch.
 - **rules_path:** `PATH`  
   Path to responder rules directory.
 - **pool_size:** `int`  
@@ -168,7 +175,7 @@ dns:
   enabled: true
   bind_addr: 0.0.0.0:53
   analysis_ip: 192.168.117.128
-  check_liveness: true
+  verify_upstream: true
   upstream_dns: 9.9.9.9:53
   default_subnet: 10.0.1.0/8
   tunnel_detection_threshold: 4.0
@@ -198,7 +205,6 @@ ca:
   root_validity_days: 3650
   leaf_validity_days: 7
 responder:
-  enabled: true
   rules_path: ./rules
   pool_size: 4
 ```
@@ -231,9 +237,12 @@ mv ./agent.exe ./internal/services/web/static/
 
 ### What's Next
 - [ ] SMTP/s sinkhole, credential, and payload collection
+- [ ] Capture support for proxied requests
+- [ ] Whitelist to bypass apex resolution safety on suspected DNS tunnels
 - [ ] DNS over HTTPS support
 - [ ] Scriptable HTTP/s responder support
 - [ ] Bidirectional communication support for canary files
 - [ ] Enhanced canary file capabilities for environmental analysis
 - [ ] Persistent memory store with snapshotting
-- [ ] expand data plane integration
+- [ ] expand control plane integration
+- [ ] improve first run experience with --init
