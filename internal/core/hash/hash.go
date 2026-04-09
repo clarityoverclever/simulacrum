@@ -15,11 +15,15 @@
 package hash
 
 import (
+	"crypto/rand"
+	"encoding/base32"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -60,4 +64,15 @@ func SaveContentWithHashName(data io.Reader) (string, error) {
 	}
 
 	return path, nil
+}
+
+// GetReqID returns a unique identifier for request context
+func GetReqID() string {
+	var b [8]byte
+	if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+
+	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b[:])
+	return strings.ToLower(encoded)
 }

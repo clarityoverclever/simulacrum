@@ -15,6 +15,7 @@
 package dns
 
 import (
+	"context"
 	"net"
 	"simulacrum/internal/core/logger"
 	"simulacrum/internal/services/responder"
@@ -23,7 +24,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func (s *Server) handleSpoofRequest(r responder.Response, ip net.IP, question dns.Question, msg *dns.Msg) *dns.Msg {
+func (s *Server) handleSpoofRequest(ctx context.Context, r responder.Response, ip net.IP, question dns.Question, msg *dns.Msg) *dns.Msg {
 	switch strings.ToUpper(string(r.RecordType)) {
 	case "A":
 		msg.Answer = append(msg.Answer, &dns.A{
@@ -32,7 +33,7 @@ func (s *Server) handleSpoofRequest(r responder.Response, ip net.IP, question dn
 		})
 		return msg
 	case "AAAA":
-		logger.Info("[dns] returning NODATA for AAAA query", "domain", question.Name)
+		logger.InfoContext(ctx, "[dns] returning NODATA for AAAA query", "domain", question.Name)
 		// sending NODATA for AAAA queries to attempt to force IPv4 fallback
 	case "TXT":
 		msg.Answer = append(msg.Answer, &dns.TXT{
@@ -41,11 +42,11 @@ func (s *Server) handleSpoofRequest(r responder.Response, ip net.IP, question dn
 		})
 		return msg
 	case "MX", "NS", "CNAME":
-		logger.Info("[dns] ignoring unsupported query", "type", dns.TypeToString[question.Qtype])
+		logger.InfoContext(ctx, "[dns] ignoring unsupported query", "type", dns.TypeToString[question.Qtype])
 		// TODO add capture support for these types
 		// sending NODATA for unsupported types
 	default:
-		logger.Info("[dns] unknown query type", "type", question.Qtype)
+		logger.InfoContext(ctx, "[dns] unknown query type", "type", question.Qtype)
 		msg.SetRcode(msg, dns.RcodeNameError)
 	}
 

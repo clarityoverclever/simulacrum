@@ -43,9 +43,8 @@ type ResponseType string
 
 const (
 	// todo - add more types
-	ResponseTypeA    ResponseType = "A"
-	ResponseTypeAAAA ResponseType = "AAAA"
-	ResponseTypeTXT  ResponseType = "TXT"
+	ResponseTypeA   ResponseType = "A"
+	ResponseTypeTXT ResponseType = "TXT"
 )
 
 type Provisioning string
@@ -87,7 +86,7 @@ func (r ResponseCode) Valid() bool {
 
 func (t ResponseType) Valid() bool {
 	switch t {
-	case ResponseTypeA, ResponseTypeAAAA, ResponseTypeTXT:
+	case ResponseTypeA, ResponseTypeTXT:
 		return true
 	default:
 		return false

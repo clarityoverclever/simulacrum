@@ -15,6 +15,7 @@
 package dns
 
 import (
+	"context"
 	"fmt"
 	"simulacrum/internal/core/logger"
 	"simulacrum/internal/services/responder"
@@ -22,7 +23,7 @@ import (
 	"strings"
 )
 
-func (s *Server) actionHandler(actions []responder.Action) error {
+func (s *Server) actionHandler(ctx context.Context, actions []responder.Action) error {
 	for _, action := range actions {
 		switch action.Type {
 		case "log":
@@ -39,7 +40,7 @@ func (s *Server) actionHandler(actions []responder.Action) error {
 				message = append(message, k, action.Args[k])
 			}
 
-			logger.Info("[action_log]", message...)
+			logger.InfoContext(ctx, "[action_log]", message...)
 		case "print":
 			var message strings.Builder
 

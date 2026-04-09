@@ -19,7 +19,10 @@ if target == "ignore.localhost" then
 		}
 	}
 }
-
+elseif target == "proxy.localhost" then
+	return {
+		mode = "proxy",
+	}
 elseif target == "txt.localhost" then
 	return {
 		mode = "spoof",

@@ -15,15 +15,16 @@
 package dns
 
 import (
-	"fmt"
+	"context"
 	"net"
+	"simulacrum/internal/core/logger"
 	"time"
 
 	"github.com/miekg/dns"
 )
 
-func (s *Server) handleProxyRequest(w dns.ResponseWriter, r *dns.Msg) (*dns.Msg, error) {
-	fmt.Printf("Proxying DNS request to %s\n", s.upstreamDNS)
+func (s *Server) handleProxyRequest(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (*dns.Msg, error) {
+	logger.InfoContext(ctx, "Proxying DNS request")
 	isTCP := false
 	if _, ok := w.RemoteAddr().(*net.TCPAddr); ok {
 		isTCP = true
@@ -40,7 +41,7 @@ func (s *Server) handleProxyRequest(w dns.ResponseWriter, r *dns.Msg) (*dns.Msg,
 
 	response, _, err := client.Exchange(r, s.upstreamDNS)
 	if err != nil {
-		fmt.Println("Error proxying DNS request:", err)
+		logger.ErrorContext(ctx, "Error proxying DNS request", "error", err)
 		return nil, err
 	}
 

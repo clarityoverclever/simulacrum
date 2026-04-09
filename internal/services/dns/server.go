@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"simulacrum/internal/core/hash"
 	"simulacrum/internal/core/inspect"
 	"simulacrum/internal/core/logger"
 	"simulacrum/internal/services/dns/dnat"
@@ -174,7 +175,7 @@ func (s *Server) Stop() error {
 }
 
 // verifyUpstreamDNS checks the live status of a domain by querying an upstream DNS server.
-func (s *Server) verifyUpstreamDNS(domain string, qtype uint16, isSuspectedTunnel bool) (bool, net.IP) {
+func (s *Server) verifyUpstreamDNS(ctx context.Context, domain string, qtype uint16, isSuspectedTunnel bool) (bool, net.IP) {
 	if !s.VerifyUpstream {
 		return true, nil // always return success if upstream checking is disabled
 	}
@@ -187,7 +188,7 @@ func (s *Server) verifyUpstreamDNS(domain string, qtype uint16, isSuspectedTunne
 		domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
 		target, err = publicsuffix.EffectiveTLDPlusOne(domain)
 		if err != nil {
-			logger.Warn("[dns] failed to resolve apex domain", "domain", domain, "error", err)
+			logger.WarnContext(ctx, "[dns] failed to resolve apex domain", "domain", domain, "error", err)
 			return true, nil // fail open if apex domain isolation fails
 		}
 	}
@@ -197,10 +198,10 @@ func (s *Server) verifyUpstreamDNS(domain string, qtype uint16, isSuspectedTunne
 
 	visited := make(map[string]struct{})
 
-	return s.resolveUpstreamIP(c, target, qtype, 0, visited)
+	return s.resolveUpstreamIP(ctx, c, target, qtype, 0, visited)
 }
 
-func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, depth int, visited map[string]struct{}) (bool, net.IP) {
+func (s *Server) resolveUpstreamIP(ctx context.Context, c *dns.Client, domain string, qtype uint16, depth int, visited map[string]struct{}) (bool, net.IP) {
 	const maxCNAMEHops = 5
 
 	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
@@ -209,7 +210,7 @@ func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, d
 	}
 
 	if _, seen := visited[domain]; seen {
-		logger.Warn("[dns] CNAME loop detected",
+		logger.WarnContext(ctx, "[dns] CNAME loop detected",
 			"domain", domain,
 			"type", dns.TypeToString[qtype],
 		)
@@ -218,7 +219,7 @@ func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, d
 	visited[domain] = struct{}{}
 
 	if depth > maxCNAMEHops {
-		logger.Warn("[dns] max CNAME hop limit reached",
+		logger.WarnContext(ctx, "[dns] max CNAME hop limit reached",
 			"domain", domain,
 			"type", dns.TypeToString[qtype],
 		)
@@ -231,7 +232,7 @@ func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, d
 
 	r, _, err := c.Exchange(m, s.upstreamDNS)
 	if err != nil {
-		logger.Warn("[dns] upstream DNS check failed",
+		logger.WarnContext(ctx, "[dns] upstream DNS check failed",
 			"domain", domain,
 			"error", err,
 			"type", dns.TypeToString[qtype])
@@ -242,7 +243,7 @@ func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, d
 	switch r.Rcode {
 	case dns.RcodeSuccess:
 		if qtype != dns.TypeA {
-			logger.Info("[dns] upstream DNS check succeeded",
+			logger.InfoContext(ctx, "[dns] upstream DNS check succeeded",
 				"domain", domain,
 				"type", dns.TypeToString[qtype],
 			)
@@ -252,7 +253,7 @@ func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, d
 		// look for a direct A record.
 		for _, ans := range r.Answer {
 			if a, ok := ans.(*dns.A); ok && a.A != nil {
-				logger.Info("[dns] upstream DNS check succeeded",
+				logger.InfoContext(ctx, "[dns] upstream DNS check succeeded",
 					"domain", domain,
 					"type", dns.TypeToString[qtype],
 					"upstream_ip", a.A,
@@ -265,27 +266,27 @@ func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, d
 		// recursion depth 5
 		for _, ans := range r.Answer {
 			if cname, ok := ans.(*dns.CNAME); ok && cname.Target != "" {
-				logger.Info("[dns] following CNAME chain", "domain", domain, "target", cname.Target, "type", dns.TypeToString[qtype])
+				logger.InfoContext(ctx, "[dns] following CNAME chain", "domain", domain, "target", cname.Target, "type", dns.TypeToString[qtype])
 				nextDomain := strings.TrimSpace(strings.TrimSuffix(cname.Target, "."))
-				return s.resolveUpstreamIP(c, nextDomain, dns.TypeA, depth+1, visited)
+				return s.resolveUpstreamIP(ctx, c, nextDomain, dns.TypeA, depth+1, visited)
 			}
 		}
 
-		logger.Info("[dns] upstream DNS check succeeded but no A record was returned",
+		logger.InfoContext(ctx, "[dns] upstream DNS check succeeded but no A record was returned",
 			"domain", domain,
 			"type", dns.TypeToString[qtype],
 		)
 		return true, nil
 
 	case dns.RcodeNameError: // NXDOMAIN
-		logger.Info("[dns] upstream DNS check failed",
+		logger.InfoContext(ctx, "[dns] upstream DNS check failed",
 			"domain", domain,
 			"error", "NXDOMAIN",
 		)
 		return false, nil
 
 	default:
-		logger.Warn("[dns] upstream DNS check failed",
+		logger.WarnContext(ctx, "[dns] upstream DNS check failed",
 			"domain", domain,
 			"rcode", dns.RcodeToString[r.Rcode],
 		)
@@ -294,7 +295,7 @@ func (s *Server) resolveUpstreamIP(c *dns.Client, domain string, qtype uint16, d
 }
 
 // testIsAliveUpstream checks the live status of a domain with an SOA query.
-func (s *Server) testIsAliveUpstream(domain string) bool {
+func (s *Server) testIsAliveUpstream(ctx context.Context, domain string) bool {
 	if !s.VerifyUpstream {
 		return true // always return success if upstream checking is disabled
 	}
@@ -302,7 +303,7 @@ func (s *Server) testIsAliveUpstream(domain string) bool {
 	domain = strings.TrimSpace(strings.TrimSuffix(domain, "."))
 	apex, err := publicsuffix.EffectiveTLDPlusOne(domain)
 	if err != nil {
-		logger.Warn("[dns] failed to resolve apex domain", "domain", domain, "error", err)
+		logger.WarnContext(ctx, "[dns] failed to resolve apex domain", "domain", domain, "error", err)
 		return true // fail open if apex domain isolation fails
 	}
 
@@ -315,7 +316,7 @@ func (s *Server) testIsAliveUpstream(domain string) bool {
 
 	r, _, err := c.Exchange(m, s.upstreamDNS)
 	if err != nil {
-		logger.Warn("[dns] upstream DNS check failed",
+		logger.WarnContext(ctx, "[dns] upstream DNS check failed",
 			"domain", domain,
 			"error", err)
 		return true // fail open if upstream check fails
@@ -324,18 +325,18 @@ func (s *Server) testIsAliveUpstream(domain string) bool {
 	// check response code
 	switch r.Rcode {
 	case dns.RcodeSuccess:
-		logger.Info("[dns] upstream DNS check succeeded",
+		logger.InfoContext(ctx, "[dns] upstream DNS check succeeded",
 			"domain", domain,
 		)
 		return true
 	case dns.RcodeNameError: // NXDOMAIN
-		logger.Info("[dns] upstream DNS check failed",
+		logger.InfoContext(ctx, "[dns] upstream DNS check failed",
 			"domain", domain,
 			"error", "NXDOMAIN",
 		)
 		return false
 	default:
-		logger.Warn("[dns] upstream DNS check failed",
+		logger.WarnContext(ctx, "[dns] upstream DNS check failed",
 			"domain", domain,
 			"rcode", dns.RcodeToString[r.Rcode],
 		)
@@ -356,7 +357,7 @@ func (s *Server) testEntropy(target string) (bool, float64) {
 	return false, entropy
 }
 
-func (s *Server) resolveProvisioning(mode responder.Provisioning, upstreamIP net.IP, domain string) (net.IP, error) {
+func (s *Server) resolveProvisioning(ctx context.Context, mode responder.Provisioning, upstreamIP net.IP, domain string) (net.IP, error) {
 	switch mode {
 	case "static":
 		ip, err := s.ipPool.Allocate()
@@ -377,7 +378,7 @@ func (s *Server) resolveProvisioning(mode responder.Provisioning, upstreamIP net
 			return upstreamIP, nil
 		}
 
-		logger.Warn("[dns] upstream IP not available for dynamic provisioning, falling back to static", "domain", domain)
+		logger.WarnContext(ctx, "[dns] upstream IP not available for dynamic provisioning, falling back to static", "domain", domain)
 
 		ip, err := s.ipPool.Allocate()
 		if err != nil {
@@ -392,7 +393,7 @@ func (s *Server) resolveProvisioning(mode responder.Provisioning, upstreamIP net
 	case "none":
 		return nil, nil
 	default:
-		logger.Warn("[dns] unknown provisioning mode", "mode", mode)
+		logger.WarnContext(ctx, "[dns] unknown provisioning mode", "mode", mode)
 		return s.analysisIP, nil
 	}
 }
@@ -437,10 +438,13 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	responseIP = s.analysisIP
 
 	for _, question := range r.Question {
+		reqID := hash.GetReqID()
+		queryCtx := logger.WithReqID(context.Background(), reqID)
+
 		// extract domain with subdomain from question
 		domain := strings.TrimSuffix(question.Name, ".")
 
-		logger.Info("[dns] query",
+		logger.InfoContext(queryCtx, "[dns] query",
 			"domain", domain,
 			"type", dns.TypeToString[question.Qtype],
 			"client", clientAddr,
@@ -452,15 +456,15 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		isSuspectedTunnel, score := s.testEntropy(question.Name)
 
 		if isSuspectedTunnel {
-			logger.Warn("[dns] possible tunneling detected", "domain", domain, "entropy", score)
+			logger.WarnContext(queryCtx, "[dns] possible tunneling detected", "domain", domain, "entropy", score)
 		}
 
 		// check upstream DNS for domain if liveness check is enabled
-		isResolvedUpstream, upstreamIP := s.verifyUpstreamDNS(question.Name, question.Qtype, isSuspectedTunnel)
+		isResolvedUpstream, upstreamIP := s.verifyUpstreamDNS(queryCtx, question.Name, question.Qtype, isSuspectedTunnel)
 
 		// return NXDOMAIN if upstream check fails
 		if !isResolvedUpstream {
-			logger.Info("[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
+			logger.InfoContext(queryCtx, "[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
 
 			msg.SetRcode(r, dns.RcodeNameError)
 			err = s.writeDNSResponse(w, msg)
@@ -487,77 +491,77 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 			}
 
 			var result responder.Result
-			if result, err = s.responderManager.Handle(context.Background(), req); err != nil {
-				fmt.Println("responder handle error", err)
-				logger.Warn("[dns] responder handle error", "error", err)
+			if result, err = s.responderManager.Handle(queryCtx, req); err != nil {
+				logger.WarnContext(queryCtx, "[dns] responder handle error", "error", err)
 			}
 
 			// process resolver results
 
 			// process internal resolver errors
 			if result.Mode == "error" {
-				err = s.actionHandler(result.Actions)
+				// todo implement lifecycle management for vm in error state
+				err = s.actionHandler(queryCtx, result.Actions)
 				if err != nil {
-					logger.Warn("[dns] action handler error", "error", err)
+					logger.WarnContext(queryCtx, "[dns] action handler error", "error", err)
 				}
 
 				msg.SetRcode(r, dns.RcodeServerFailure)
 				err = s.writeDNSResponse(w, msg)
 				if err != nil {
-					logger.Warn("[dns] failed to write response after error mode", "error", err)
+					logger.WarnContext(queryCtx, "[dns] failed to write response after error mode", "error", err)
 				}
 				continue
 			}
 
 			// process ignore mode before provisioning
 			if result.Mode == "ignore" {
-				err = s.actionHandler(result.Actions)
+				err = s.actionHandler(queryCtx, result.Actions)
 				if err != nil {
-					logger.Warn("[dns] action handler error", "error", err)
+					logger.WarnContext(queryCtx, "[dns] action handler error", "error", err)
 				}
 
 				msg.SetRcode(r, dns.RcodeNameError)
 				err = s.writeDNSResponse(w, msg)
 				if err != nil {
-					logger.Warn("[dns] failed to write response after ignore mode", "error", err)
+					logger.WarnContext(queryCtx, "[dns] failed to write response after ignore mode", "error", err)
 				}
 
 				continue
 			}
 
-			// provision an IP based on responder directive
-			responseIP, err = s.resolveProvisioning(result.Response.Provisioning, upstreamIP, domain)
-			if err != nil || responseIP == nil {
-				logger.Warn("[dns] provisioning resolution failed, fallback to analysisIP", "domain", domain, "error", err)
-				// fallback to analysisIP if provisioning fails
-				responseIP = s.analysisIP
-			}
-
 			switch result.Mode {
 			case "spoof":
-				msg = s.handleSpoofRequest(result.Response, responseIP, question, msg)
+				// provision an IP based on responder directive
+				responseIP, err = s.resolveProvisioning(queryCtx, result.Response.Provisioning, upstreamIP, domain)
+				if err != nil || responseIP == nil {
+					logger.WarnContext(queryCtx, "[dns] provisioning resolution failed, fallback to analysisIP", "domain", domain, "error", err)
+					// fallback to analysisIP if provisioning fails
+					responseIP = s.analysisIP
+				}
 
-				logger.Info("[dns] response",
+				msg = s.handleSpoofRequest(queryCtx, result.Response, responseIP, question, msg)
+
+				logger.InfoContext(queryCtx, "[dns] response",
 					"domain", domain,
 					"returned_ip", responseIP.String(),
 				)
 			case "proxy":
-				msg, err = s.handleProxyRequest(w, r)
+				msg, err = s.handleProxyRequest(queryCtx, w, r)
 			default:
-				logger.Warn("[dns] unknown mode", "mode", result.Mode)
+				logger.WarnContext(queryCtx, "[dns] unknown mode", "mode", result.Mode)
 				continue
 			}
 
 			// handle actions
-			err = s.actionHandler(result.Actions)
+			err = s.actionHandler(queryCtx, result.Actions)
 			if err != nil {
-				logger.Warn("[dns] action handler error", "error", err)
+				logger.WarnContext(queryCtx, "[dns] action handler error", "error", err)
 			}
 		}
 
 		err = s.writeDNSResponse(w, msg)
 		if err != nil {
-			logger.Warn("[dns] failed to write response", "error", err)
+			logger.WarnContext(queryCtx, "[dns] failed to write response", "error", err)
 		}
 	}
 }

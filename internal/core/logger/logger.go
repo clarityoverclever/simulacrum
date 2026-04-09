@@ -15,6 +15,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -22,6 +23,8 @@ import (
 
 	"github.com/natefinch/lumberjack"
 )
+
+type requestIDKey struct{}
 
 // Init initializes the logger
 func Init(level slog.Level, logFilePath string) error {
@@ -67,4 +70,38 @@ func Debug(msg string, args ...any) {
 // Warn logs a warning
 func Warn(msg string, args ...any) {
 	slog.Warn(msg, args...)
+}
+
+// WithReqID attaches a request ID to the context used for logging.
+func WithReqID(ctx context.Context, reqID string) context.Context {
+	if reqID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, requestIDKey{}, reqID)
+}
+
+func fromContext(ctx context.Context) *slog.Logger {
+	if ctx == nil {
+		return slog.Default()
+	}
+	if reqID, ok := ctx.Value(requestIDKey{}).(string); ok && reqID != "" {
+		return slog.Default().With("req_id", reqID)
+	}
+	return slog.Default()
+}
+
+func InfoContext(ctx context.Context, msg string, args ...any) {
+	fromContext(ctx).Info(msg, args...)
+}
+
+func WarnContext(ctx context.Context, msg string, args ...any) {
+	fromContext(ctx).Warn(msg, args...)
+}
+
+func ErrorContext(ctx context.Context, msg string, args ...any) {
+	fromContext(ctx).Error(msg, args...)
+}
+
+func DebugContext(ctx context.Context, msg string, args ...any) {
+	fromContext(ctx).Debug(msg, args...)
 }
