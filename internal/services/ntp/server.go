@@ -16,6 +16,7 @@ package ntp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"simulacrum/internal/core/logger"
@@ -77,10 +78,10 @@ func (s *Server) Start() error {
 func (s *Server) Stop() error {
 	fmt.Println("[ntp] stopping server")
 
-	// Signal shutdown
+	// signal shutdown
 	s.cancel()
 
-	// Close the connection
+	// close the connection
 	if s.conn != nil {
 		if err := s.conn.Close(); err != nil {
 			return fmt.Errorf("error closing NTP connection: %w", err)
@@ -118,7 +119,13 @@ func (s *Server) serve() {
 			return
 		default:
 			// Set read deadline so ReadFromUDP doesn't block forever
-			s.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+			if err := s.conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
+				if errors.Is(err, net.ErrClosed) || s.ctx.Err() != nil {
+					return
+				}
+				logger.Error("[ntp] Error setting NTP read deadline", "error", err)
+				continue
+			}
 
 			buf := make([]byte, 48)
 			_, remoteAddr, err := s.conn.ReadFromUDP(buf)
@@ -126,6 +133,9 @@ func (s *Server) serve() {
 				// Check if it's a timeout (expected during shutdown)
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					continue
+				}
+				if errors.Is(err, net.ErrClosed) || s.ctx.Err() != nil {
+					return
 				}
 				logger.Error("[ntp] Error reading from NTP server", "error", err)
 				continue
