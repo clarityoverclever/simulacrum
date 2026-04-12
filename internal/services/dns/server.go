@@ -520,7 +520,17 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 					logger.WarnContext(queryCtx, "[dns] action handler error", "error", err)
 				}
 
-				msg.SetRcode(r, dns.RcodeNameError)
+				switch result.Response.ResponseCode {
+				case "NXDOMAIN":
+					msg.SetRcode(r, dns.RcodeNameError)
+				case "SERVFAIL":
+					msg.SetRcode(r, dns.RcodeServerFailure)
+				case "REFUSED":
+					msg.SetRcode(r, dns.RcodeRefused)
+				default:
+					msg.SetRcode(r, dns.RcodeSuccess)
+				}
+
 				err = s.writeDNSResponse(w, msg)
 				if err != nil {
 					logger.WarnContext(queryCtx, "[dns] failed to write response after ignore mode", "error", err)

@@ -77,7 +77,8 @@ func (b *Bridge) Result() (Result, error) {
 	}
 	result.Mode = mode
 
-	if result.Mode == "spoof" {
+	switch mode {
+	case "spoof":
 		response := tbl.RawGetString("response")
 		if responseTbl, ok := response.(*lua.LTable); ok {
 			var rsp Response
@@ -119,6 +120,21 @@ func (b *Bridge) Result() (Result, error) {
 			result.Response = rsp
 		} else {
 			return Result{}, errors.New("script response must be a table")
+		}
+	case "ignore":
+		response := tbl.RawGetString("response")
+		if responseTbl, ok := response.(*lua.LTable); ok {
+			var rsp Response
+
+			if v := responseTbl.RawGetString("rcode"); v != lua.LNil {
+				code := ResponseCode(lua.LVAsString(v))
+				if !code.Valid() {
+					return Result{}, fmt.Errorf("invalid response code: %q", lua.LVAsString(v))
+				}
+				rsp.ResponseCode = code
+			}
+
+			result.Response = rsp
 		}
 	}
 
