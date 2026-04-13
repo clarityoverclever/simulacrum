@@ -7,8 +7,11 @@ Simulacrum aims to provide deterministic network behavior for analysis and testi
 
 ---
 
-## Disclaimer
-### This project is under active development, and the documentation is incomplete. Feedback is welcome and appreciated.
+## Open Beta
+### This project is in open beta, under active development, and the documentation is incomplete. 
+### Read more about the Open Beta [here](https://github.com/simulacrum/simulacrum/blob/main/open-beta.md).
+
+---
 
 ### Objectives
 Tools like INetSim laid the groundwork for network simulation in malware analysis and have been the backbone of network simulation for years; however, as malware has evolved, the tool is starting to show its age.

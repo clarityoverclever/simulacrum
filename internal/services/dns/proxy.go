@@ -51,6 +51,6 @@ func (s *Server) handleProxyRequest(ctx context.Context, w dns.ResponseWriter, r
 }
 
 func captureProxyResponse(response *dns.Msg) error {
-	// todo implement response capture logic
+	// todo add capture logic
 	return nil
 }

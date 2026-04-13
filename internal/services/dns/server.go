@@ -201,6 +201,7 @@ func (s *Server) verifyUpstreamDNS(ctx context.Context, domain string, qtype uin
 	return s.resolveUpstreamIP(ctx, c, target, qtype, 0, visited)
 }
 
+// resolveUpstreamIP resolves an IP address for a domain by querying an upstream DNS server.
 func (s *Server) resolveUpstreamIP(ctx context.Context, c *dns.Client, domain string, qtype uint16, depth int, visited map[string]struct{}) (bool, net.IP) {
 	const maxCNAMEHops = 5
 
@@ -357,9 +358,10 @@ func (s *Server) testEntropy(target string) (bool, float64) {
 	return false, entropy
 }
 
+// resolveProvisioning returns an IP address for a domain based on provisioning mode.
 func (s *Server) resolveProvisioning(ctx context.Context, mode responder.Provisioning, upstreamIP net.IP, domain string) (net.IP, error) {
 	switch mode {
-	case "static":
+	case "static": // allocate an IP from the default subnet
 		ip, err := s.ipPool.Allocate()
 		if err != nil {
 			return nil, fmt.Errorf("failed to allocate static IP: %w", err)
@@ -370,7 +372,7 @@ func (s *Server) resolveProvisioning(ctx context.Context, mode responder.Provisi
 		}
 
 		return ip, nil
-	case "dynamic":
+	case "dynamic": // use the upstream IP and fall back to static if unavailable
 		if upstreamIP != nil {
 			if err := s.addDNAT(upstreamIP, domain); err != nil {
 				return nil, err
@@ -390,7 +392,7 @@ func (s *Server) resolveProvisioning(ctx context.Context, mode responder.Provisi
 		}
 
 		return ip, nil
-	case "none":
+	case "none": // do not provision an IP
 		return nil, nil
 	default:
 		logger.WarnContext(ctx, "[dns] unknown provisioning mode", "mode", mode)
@@ -398,6 +400,7 @@ func (s *Server) resolveProvisioning(ctx context.Context, mode responder.Provisi
 	}
 }
 
+// addDNAT adds a DNAT rule for the given IP and domain.
 func (s *Server) addDNAT(IP net.IP, domain string) error {
 	if IP == nil {
 		return fmt.Errorf("cannot add DNAT for nil IP")
