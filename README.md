@@ -9,7 +9,7 @@ Simulacrum aims to provide deterministic network behavior for analysis and testi
 
 ## Open Beta
 ### This project is in open beta, under active development, and the documentation is incomplete. 
-### Read more about the Open Beta [here](https://github.com/simulacrum/simulacrum/blob/main/open-beta.md).
+### Read more about the Open Beta [here](https://github.com/clarityoverclever/simulacrum/blob/main/OPEN-BETA.md).
 
 ---
 
