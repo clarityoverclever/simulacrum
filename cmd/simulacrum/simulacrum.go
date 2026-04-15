@@ -199,7 +199,10 @@ func run(cfg *config.Config, quit <-chan os.Signal) error {
 		}
 
 		for _, service := range services {
-			if err = service.Stop(); err != nil {
+			if stopErr := service.Stop(); err != nil {
+				if errors.Is(stopErr, net.ErrClosed) {
+					return nil
+				}
 				fmt.Printf("[%s] service stop error: %v\n", service.Name(), err)
 			}
 		}

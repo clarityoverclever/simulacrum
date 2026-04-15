@@ -21,8 +21,7 @@ Response Modes: Control the engine with spoof, proxy, ignore, or error modes.
 Weighted Routing: (Beta Feature) I am implementing a weight-based priority in the metadata. If multiple scripts match a domain, the highest weight wins.
 
 ### What I Need From You
-I am looking for "workflow friction" and identification of missing QoL features:
-
+I am looking for "workflow friction" and identification of missing QoL 
 The API Surface: Does the Lua bridge feel expressive enough for the C2 traffic you're seeing?
 
 The "First Run" Experience: Was the transition from "no certs" to "TLS intercepting" clear?
@@ -31,3 +30,7 @@ Stability: Does the memory store hold up under high-concurrency requests?
 
 ### Community & Future
 I am architecting a separate repository for Community Patterns. If you write a script for a specific threat actor, I’d love for you to contribute it once the structure is finalized.
+
+### Where is the AI?
+Since this project requires deterministic behavior, and AI is inherently indeterminate, I don't see value in adding agentic features.
+I am open to discussion about this, but it is not a priority.
