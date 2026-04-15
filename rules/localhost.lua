@@ -8,6 +8,12 @@ print("using localhost rule")
 if target == "ignore.localhost" then
 	return {
 		mode = "ignore",
+		response = {
+			rcode = "NOERROR",
+			rtype = "TXT",
+			value = "hello from txt.localhost",
+			provisioning = "none"
+		},
 		actions = {
 		{
 			type = "print",

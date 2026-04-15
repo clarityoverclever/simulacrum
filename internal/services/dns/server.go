@@ -40,11 +40,10 @@ type Server struct {
 	dnsTcpServer             *dns.Server
 	VerifyUpstream           bool
 	upstreamDNS              string
-	SpoofNetwork             bool
-	tunnelDetection          bool
 	tunnelDetectionThreshold float64
 	responderManager         *responder.Manager
 	ipPool                   *ippool.Pool
+	ignoreList               *ignore
 	dnatManager              *dnat.Manager
 	dnatMap                  map[string]string // domain -> spoofed IP
 	dnatLock                 sync.RWMutex
@@ -56,9 +55,7 @@ type Config struct {
 	AnalysisIP               string
 	VerifyUpstream           bool
 	UpstreamDNS              string
-	SpoofNetwork             bool
 	DefaultSubnet            string
-	TunnelDetection          bool
 	TunnelDetectionThreshold float64
 	ResponseManager          *responder.Manager
 }
@@ -77,6 +74,8 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("invalid default subnet: %w", err)
 	}
 
+	ignoreList := newIgnoreList()
+
 	server := &Server{
 		bindAddress:              cfg.BindAddress,
 		analysisIP:               ip,
@@ -85,6 +84,7 @@ func New(cfg Config) (*Server, error) {
 		tunnelDetectionThreshold: cfg.TunnelDetectionThreshold,
 		responderManager:         cfg.ResponseManager,
 		ipPool:                   pool,
+		ignoreList:               ignoreList,
 		dnatManager:              dnat.New(cfg.AnalysisIP),
 		dnatMap:                  make(map[string]string),
 	}
@@ -447,32 +447,44 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		// extract domain with subdomain from question
 		domain := strings.TrimSuffix(question.Name, ".")
 
-		logger.InfoContext(queryCtx, "[dns] query",
-			"domain", domain,
-			"type", dns.TypeToString[question.Qtype],
-			"client", clientAddr,
-		)
+		// check if the domain has been ignored and set default values for domain metadata
+		ignored := s.ignoreList.checkIsIgnored(domain)
+		isSuspectedTunnel := false
+		score := 0.0
+		testedUpstream := false
+		isResolvedUpstream := true
+		upstreamIP := net.IP{}
 
-		// start data collection for response manager
+		// collect data for non-ignored domains
+		if !ignored {
+			logger.InfoContext(queryCtx, "[dns] query",
+				"domain", domain,
+				"type", dns.TypeToString[question.Qtype],
+				"client", clientAddr,
+			)
 
-		// attempt to detect tunneling by testing domain entropy
-		isSuspectedTunnel, score := s.testEntropy(question.Name)
+			// start metadata collection for response manager
 
-		if isSuspectedTunnel {
-			logger.WarnContext(queryCtx, "[dns] possible tunneling detected", "domain", domain, "entropy", score)
-		}
+			// attempt to detect tunneling by testing domain entropy
+			isSuspectedTunnel, score = s.testEntropy(question.Name)
 
-		// check upstream DNS for domain if liveness check is enabled
-		isResolvedUpstream, upstreamIP := s.verifyUpstreamDNS(queryCtx, question.Name, question.Qtype, isSuspectedTunnel)
+			if isSuspectedTunnel {
+				logger.WarnContext(queryCtx, "[dns] possible tunneling detected", "domain", domain, "entropy", score)
+			}
 
-		// return NXDOMAIN if upstream check fails
-		if !isResolvedUpstream {
-			logger.InfoContext(queryCtx, "[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
+			// check upstream DNS for domain if liveness check is enabled
+			testedUpstream = s.VerifyUpstream
+			isResolvedUpstream, upstreamIP = s.verifyUpstreamDNS(queryCtx, question.Name, question.Qtype, isSuspectedTunnel)
 
-			msg.SetRcode(r, dns.RcodeNameError)
-			err = s.writeDNSResponse(w, msg)
+			// return NXDOMAIN if upstream check fails
+			if !isResolvedUpstream {
+				logger.InfoContext(queryCtx, "[dns] returning NXDOMAIN for non-existent domain", "domain", domain)
 
-			continue
+				msg.SetRcode(r, dns.RcodeNameError)
+				err = s.writeDNSResponse(w, msg)
+
+				continue
+			}
 		}
 
 		// send data to response manager
@@ -486,7 +498,7 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 				Inputs: responder.Inputs{
 					IsSuspectedTunnel: isSuspectedTunnel,
 					Entropy:           score,
-					TestedUpstream:    s.VerifyUpstream,
+					TestedUpstream:    testedUpstream,
 					IsAlive:           isResolvedUpstream,
 				},
 				Meta: map[string]string{"qtype": dns.TypeToString[question.Qtype]},
@@ -534,6 +546,12 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 					msg.SetRcode(r, dns.RcodeSuccess)
 				}
 
+				// add domain to ignore list
+				if !ignored {
+					logger.InfoContext(queryCtx, "[dns] ignoring domain", "domain", domain)
+					s.ignoreList.add(domain)
+				}
+
 				err = s.writeDNSResponse(w, msg)
 				if err != nil {
 					logger.WarnContext(queryCtx, "[dns] failed to write response after ignore mode", "error", err)
@@ -544,6 +562,12 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 
 			switch result.Mode {
 			case "spoof":
+				// remove previously ignored domain
+				if ignored {
+					logger.InfoContext(queryCtx, "[dns] removing ignored domain", "domain", domain)
+					s.ignoreList.remove(domain)
+				}
+
 				// provision an IP based on responder directive
 				responseIP, err = s.resolveProvisioning(queryCtx, result.Response.Provisioning, upstreamIP, domain)
 				if err != nil || responseIP == nil {
@@ -559,6 +583,12 @@ func (s *Server) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 					"returned_ip", responseIP.String(),
 				)
 			case "proxy":
+				// remove previously ignored domain
+				if ignored {
+					logger.InfoContext(queryCtx, "[dns] removing ignored domain", "domain", domain)
+					s.ignoreList.remove(domain)
+				}
+
 				msg, err = s.handleProxyRequest(queryCtx, w, r)
 			default:
 				logger.WarnContext(queryCtx, "[dns] unknown mode", "mode", result.Mode)
