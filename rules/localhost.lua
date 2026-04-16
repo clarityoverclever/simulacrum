@@ -3,21 +3,12 @@
 local target = request.target
 local key = request.key
 
-print("using localhost rule")
-
 if target == "ignore.localhost" then
 	return {
 		mode = "ignore",
-		actions = {
-		{
-			type = "print",
-			args = {
-				message = "intentionally ignoring this record",
-				key = key,
-				target = target
-			}
-		}
-	}
+		response = {
+			rcode = "NXDOMAIN",
+		},
 }
 elseif target == "proxy.localhost" then
 	return {

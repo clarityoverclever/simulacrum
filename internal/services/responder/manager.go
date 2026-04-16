@@ -64,9 +64,18 @@ func (m *Manager) Handle(ctx context.Context, req RequestContext) (Result, error
 	if err != nil {
 		return Result{}, fmt.Errorf("failed to checkout VM: %w", err)
 	}
-	defer m.pool.CheckIn(vm)
 
-	bridge := m.newBridge(vm, ctx, req, rule)
+	// capture any errors from the VM and pass them to the check-in function for handling
+	defer func() {
+		// execute vm lifecycle tombstone
+		if vm.RequestCount > vm.MaxRequests {
+			err = fmt.Errorf("VM request count exceeded: %d", vm.RequestCount)
+		}
+
+		m.pool.CheckIn(vm, err)
+	}()
+
+	bridge := m.newBridge(vm.State, ctx, req, rule)
 
 	if err = bridge.InjectContext(req); err != nil {
 		return Result{}, fmt.Errorf("failed to inject context: %w", err)
@@ -75,12 +84,12 @@ func (m *Manager) Handle(ctx context.Context, req RequestContext) (Result, error
 	bridge.RegisterFunctions()
 
 	if err = bridge.Run(); err != nil {
-		return Result{}, fmt.Errorf("failed to run bridge: %w", err)
+		return Result{}, err
 	}
 
 	response, err := bridge.Result()
 	if err != nil {
-		return Result{}, fmt.Errorf("failed to get result: %w", err)
+		return Result{}, err
 	}
 
 	return response, nil
